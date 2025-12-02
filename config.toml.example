@@ -1,0 +1,17 @@
+[server]
+port = "8999"
+
+[web]
+account = "admin"
+password = "admin"
+
+[database]
+dsn = "oci-helper.db"
+
+[logging]
+level = "info"
+
+[ai]
+api_key = "sk-xxx"
+base_url = "https://api.siliconflow.cn"
+model = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
