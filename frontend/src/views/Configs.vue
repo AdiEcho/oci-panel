@@ -3,7 +3,7 @@
     <!-- 页面标题 -->
     <div class="flex justify-between items-center">
       <h1 class="text-3xl font-bold">配置管理</h1>
-      <button @click="showAddModal = true" class="btn btn-primary">
+      <button class="btn btn-primary" @click="showAddModal = true">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
@@ -14,7 +14,13 @@
     <!-- 配置列表卡片 -->
     <div class="card">
       <div class="p-6 border-b border-slate-700">
-        <input v-model="searchText" @input="handleSearch" type="text" placeholder="搜索配置名..." class="input max-w-md" />
+        <input
+          v-model="searchText"
+          type="text"
+          placeholder="搜索配置名..."
+          class="input max-w-md"
+          @input="handleSearch"
+        />
       </div>
 
       <div class="overflow-x-auto">
@@ -35,14 +41,18 @@
               <td colspan="7" class="px-6 py-8 text-center text-slate-400">
                 <svg class="animate-spin h-8 w-8 mx-auto" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
               </td>
             </tr>
             <tr v-else-if="!configs.length">
               <td colspan="7" class="px-6 py-8 text-center text-slate-400">暂无配置</td>
             </tr>
-            <tr v-else v-for="config in configs" :key="config.id" class="hover:bg-slate-700/30">
+            <tr v-for="config in configs" v-else :key="config.id" class="hover:bg-slate-700/30">
               <td class="px-6 py-4 font-medium">{{ config.username }}</td>
               <td class="px-6 py-4">{{ config.tenantName || '-' }}</td>
               <td class="px-6 py-4">
@@ -66,26 +76,46 @@
               <td class="px-6 py-4 text-sm text-slate-400">{{ config.createTime }}</td>
               <td class="px-6 py-4">
                 <div class="flex gap-2">
-                  <button @click="viewConfigDetails(config)" class="btn btn-primary text-sm" title="配置详情">
+                  <button class="btn btn-primary text-sm" title="配置详情" @click="viewConfigDetails(config)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
                     </svg>
                     详情
                   </button>
-                  <button @click="createInstance(config)" class="btn btn-success text-sm" title="创建实例">
+                  <button class="btn btn-success text-sm" title="创建实例" @click="createInstance(config)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
                   </button>
-                  <button @click="editConfig(config)" class="text-blue-400 hover:text-blue-300" title="编辑配置">
+                  <button class="text-blue-400 hover:text-blue-300" title="编辑配置" @click="editConfig(config)">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                      />
                     </svg>
                   </button>
-                  <button @click="deleteConfig(config.id)" class="text-red-400 hover:text-red-300" title="删除配置">
+                  <button class="text-red-400 hover:text-red-300" title="删除配置" @click="deleteConfig(config.id)">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -97,25 +127,32 @@
 
       <!-- 分页 -->
       <div v-if="totalPages > 1" class="p-6 border-t border-slate-700 flex justify-center gap-2">
-        <button @click="loadConfigs(currentPage - 1)" :disabled="currentPage === 1" class="btn btn-secondary">上一页</button>
+        <button :disabled="currentPage === 1" class="btn btn-secondary" @click="loadConfigs(currentPage - 1)">
+          上一页
+        </button>
         <span class="flex items-center px-4 text-slate-300">第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button @click="loadConfigs(currentPage + 1)" :disabled="currentPage === totalPages" class="btn btn-secondary">下一页</button>
+        <button :disabled="currentPage === totalPages" class="btn btn-secondary" @click="loadConfigs(currentPage + 1)">
+          下一页
+        </button>
       </div>
     </div>
 
     <!-- 添加/编辑配置弹窗 -->
-    <div v-if="showAddModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      v-if="showAddModal"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-700 flex justify-between items-center">
           <h3 class="text-xl font-bold">{{ editingConfig ? '编辑配置' : '添加OCI配置' }}</h3>
-          <button @click="closeModal" class="text-slate-400 hover:text-white">
+          <button class="text-slate-400 hover:text-white" @click="closeModal">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form @submit.prevent="submitForm" class="p-6 space-y-4">
+        <form class="p-6 space-y-4" @submit.prevent="submitForm">
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">配置名称</label>
             <input v-model="form.username" type="text" class="input" placeholder="例: 我的OCI配置" required />
@@ -123,17 +160,38 @@
 
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">配置内容</label>
-            <textarea v-model="form.configContent" class="input min-h-[200px] font-mono text-sm" placeholder="user=ocid1.user.oc1..aaaaaaaaxxx&#10;fingerprint=c6:1b:9f:cd:01:9d:7a:xxx&#10;tenancy=ocid1.tenancy.oc1..aaaaaaaaxxx&#10;region=sa-saopaulo-1" required></textarea>
-            <p class="text-xs text-slate-400 mt-2">请按照格式输入：user、fingerprint、tenancy、region（每行一个配置项）</p>
+            <textarea
+              v-model="form.configContent"
+              class="input min-h-[200px] font-mono text-sm"
+              placeholder="user=ocid1.user.oc1..aaaaaaaaxxx&#10;fingerprint=c6:1b:9f:cd:01:9d:7a:xxx&#10;tenancy=ocid1.tenancy.oc1..aaaaaaaaxxx&#10;region=sa-saopaulo-1"
+              required
+            ></textarea>
+            <p class="text-xs text-slate-400 mt-2">
+              请按照格式输入：user、fingerprint、tenancy、region（每行一个配置项）
+            </p>
           </div>
 
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">密钥文件</label>
-            <div @drop.prevent="handleFileDrop" @dragover.prevent="isDragging = true" @dragleave.prevent="isDragging = false" :class="['border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer', isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-slate-600 hover:border-slate-500']" @click="$refs.fileInput.click()">
-              <input ref="fileInput" type="file" accept=".pem,.key" @change="handleFileSelect" class="hidden" />
+            <div
+              :class="[
+                'border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer',
+                isDragging ? 'border-blue-500 bg-blue-500/10' : 'border-slate-600 hover:border-slate-500'
+              ]"
+              @drop.prevent="handleFileDrop"
+              @dragover.prevent="isDragging = true"
+              @dragleave.prevent="isDragging = false"
+              @click="$refs.fileInput.click()"
+            >
+              <input ref="fileInput" type="file" accept=".pem,.key" class="hidden" @change="handleFileSelect" />
               <div v-if="!uploadedFile" class="text-center">
                 <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
                 </svg>
                 <p class="mt-2 text-sm text-slate-300">点击选择文件或拖拽文件到此处</p>
                 <p class="mt-1 text-xs text-slate-400">支持 .pem 或 .key 格式</p>
@@ -141,14 +199,19 @@
               <div v-else class="flex items-center justify-between">
                 <div class="flex items-center">
                   <svg class="h-8 w-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                   <div class="ml-3">
                     <p class="text-sm font-medium text-slate-200">{{ uploadedFile.name }}</p>
                     <p class="text-xs text-slate-400">{{ formatFileSize(uploadedFile.size) }}</p>
                   </div>
                 </div>
-                <button type="button" @click.stop="clearFile" class="text-red-400 hover:text-red-300">
+                <button type="button" class="text-red-400 hover:text-red-300" @click.stop="clearFile">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -159,22 +222,28 @@
           </div>
 
           <div class="flex gap-3 pt-4">
-            <button type="button" @click="closeModal" class="btn btn-secondary flex-1">取消</button>
-            <button type="submit" class="btn btn-primary flex-1" :disabled="submitting">{{ submitting ? '提交中...' : '提交' }}</button>
+            <button type="button" class="btn btn-secondary flex-1" @click="closeModal">取消</button>
+            <button type="submit" class="btn btn-primary flex-1" :disabled="submitting">
+              {{ submitting ? '提交中...' : '提交' }}
+            </button>
           </div>
         </form>
       </div>
     </div>
 
     <!-- 配置详情弹窗 -->
-    <div v-if="showConfigDetailsSidebar" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @click.self="closeConfigDetailsSidebar">
+    <div
+      v-if="showConfigDetailsSidebar"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      @click.self="closeConfigDetailsSidebar"
+    >
       <div class="bg-slate-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <div class="bg-slate-800 border-b border-slate-700 p-6 flex justify-between items-center flex-shrink-0">
           <div>
             <h3 class="text-xl font-bold">配置详情</h3>
             <p class="text-sm text-slate-400 mt-1">{{ configDetails?.username }}</p>
           </div>
-          <button @click="closeConfigDetailsSidebar" class="text-slate-400 hover:text-white">
+          <button class="text-slate-400 hover:text-white" @click="closeConfigDetailsSidebar">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -185,20 +254,39 @@
           <div v-if="loadingDetails" class="p-12 text-center">
             <svg class="animate-spin h-12 w-12 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
             </svg>
           </div>
 
           <div v-else-if="configDetails" class="p-6">
             <!-- 标签导航 -->
             <div class="flex gap-2 mb-6 border-b border-slate-700">
-              <button v-for="tab in detailTabs" :key="tab.key" @click="activeTab = tab.key" :class="['px-4 py-3 text-sm font-medium transition-all border-b-2', activeTab === tab.key ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300']">
+              <button
+                v-for="tab in detailTabs"
+                :key="tab.key"
+                :class="[
+                  'px-4 py-3 text-sm font-medium transition-all border-b-2',
+                  activeTab === tab.key
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-300'
+                ]"
+                @click="activeTab = tab.key"
+              >
                 {{ tab.label }}
               </button>
               <div class="ml-auto flex items-center gap-2">
-                <button @click="refreshCurrentTab" class="btn btn-secondary text-sm" :disabled="loadingTab">
+                <button class="btn btn-secondary text-sm" :disabled="loadingTab" @click="refreshCurrentTab">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
                   </svg>
                   刷新
                 </button>
@@ -211,7 +299,11 @@
                 <div class="text-center py-8">
                   <svg class="animate-spin h-8 w-8 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   <p class="text-slate-400 mt-2">加载信息中...</p>
                 </div>
@@ -219,8 +311,18 @@
               <div v-else class="card p-6">
                 <h4 class="text-lg font-semibold mb-4 flex items-center gap-2">
                   <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
                   </svg>
                   配置与租户信息
                 </h4>
@@ -232,14 +334,16 @@
                   <div>
                     <label class="text-slate-400">当前区域</label>
                     <p class="text-white">
-                      <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300">{{ configDetails.region }}</span>
+                      <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300">{{
+                        configDetails.region
+                      }}</span>
                     </p>
                   </div>
-                  <div class="col-span-2" v-if="tabTenant">
+                  <div v-if="tabTenant" class="col-span-2">
                     <label class="text-slate-400">租户名称</label>
                     <p class="text-white font-medium">{{ tabTenant.name }}</p>
                   </div>
-                  <div class="col-span-2" v-if="tabTenant">
+                  <div v-if="tabTenant" class="col-span-2">
                     <label class="text-slate-400">租户ID</label>
                     <p class="text-white font-mono text-xs break-all">{{ tabTenant.id }}</p>
                   </div>
@@ -270,22 +374,57 @@
                   <div v-if="tabTenant">
                     <label class="text-slate-400 mb-1 block">密码过期时间（天）</label>
                     <div class="flex items-center gap-2">
-                      <input v-if="editingPasswordExpiry" v-model.number="passwordExpiryInput" type="number" min="0" max="365" class="input text-sm py-1 px-2 w-24" placeholder="0" />
-                      <span v-else class="text-white">{{ tabTenant.passwordExpiresAfter === 0 ? '永不过期' : tabTenant.passwordExpiresAfter + ' 天' }}</span>
-                      <button v-if="!editingPasswordExpiry" @click="startEditPasswordExpiry" class="text-blue-400 hover:text-blue-300 text-xs" title="修改">
+                      <input
+                        v-if="editingPasswordExpiry"
+                        v-model.number="passwordExpiryInput"
+                        type="number"
+                        min="0"
+                        max="365"
+                        class="input text-sm py-1 px-2 w-24"
+                        placeholder="0"
+                      />
+                      <span v-else class="text-white">{{
+                        tabTenant.passwordExpiresAfter === 0 ? '永不过期' : tabTenant.passwordExpiresAfter + ' 天'
+                      }}</span>
+                      <button
+                        v-if="!editingPasswordExpiry"
+                        class="text-blue-400 hover:text-blue-300 text-xs"
+                        title="修改"
+                        @click="startEditPasswordExpiry"
+                      >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
                         </svg>
                       </button>
                       <div v-else class="flex gap-1">
-                        <button @click="savePasswordExpiry" class="text-green-400 hover:text-green-300 text-xs" :disabled="updatingPasswordExpiry" title="保存">
+                        <button
+                          class="text-green-400 hover:text-green-300 text-xs"
+                          :disabled="updatingPasswordExpiry"
+                          title="保存"
+                          @click="savePasswordExpiry"
+                        >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                           </svg>
                         </button>
-                        <button @click="cancelEditPasswordExpiry" class="text-red-400 hover:text-red-300 text-xs" :disabled="updatingPasswordExpiry" title="取消">
+                        <button
+                          class="text-red-400 hover:text-red-300 text-xs"
+                          :disabled="updatingPasswordExpiry"
+                          title="取消"
+                          @click="cancelEditPasswordExpiry"
+                        >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
                           </svg>
                         </button>
                       </div>
@@ -298,7 +437,12 @@
                 <div v-if="tabTenant && tabTenant.regions?.length" class="mt-4 pt-4 border-t border-slate-700">
                   <label class="text-slate-400 text-sm block mb-2">订阅区域 ({{ tabTenant.regions.length }})</label>
                   <div class="flex flex-wrap gap-2">
-                    <span v-for="region in tabTenant.regions" :key="region" class="px-2 py-1 text-xs rounded bg-blue-500/20 text-blue-300">{{ region }}</span>
+                    <span
+                      v-for="region in tabTenant.regions"
+                      :key="region"
+                      class="px-2 py-1 text-xs rounded bg-blue-500/20 text-blue-300"
+                      >{{ region }}</span
+                    >
                   </div>
                 </div>
               </div>
@@ -308,56 +452,113 @@
                 <h4 class="text-lg font-semibold mb-4 flex items-center justify-between">
                   <span class="flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                      />
                     </svg>
                     用户列表 ({{ tabTenant.userList.length }})
                   </span>
                 </h4>
                 <div class="space-y-3">
-                  <div v-for="user in tabTenant.userList" :key="user.id" class="border border-slate-600 rounded-lg p-4 hover:border-blue-500/50 transition-all">
+                  <div
+                    v-for="user in tabTenant.userList"
+                    :key="user.id"
+                    class="border border-slate-600 rounded-lg p-4 hover:border-blue-500/50 transition-all"
+                  >
                     <div class="flex justify-between items-start mb-2">
                       <div class="flex-1">
                         <h5 class="text-white font-semibold">{{ user.name }}</h5>
                         <p v-if="user.email" class="text-slate-400 text-xs mt-1">{{ user.email }}</p>
                       </div>
                       <div class="flex gap-2 items-center ml-4">
-                        <span v-if="user.isMfaActivated" class="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-300">MFA</span>
-                        <span v-if="user.emailVerified" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">已验证</span>
-                        <span class="text-xs px-2 py-0.5 rounded" :class="user.state === 'ACTIVE' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'">{{ user.state }}</span>
+                        <span
+                          v-if="user.isMfaActivated"
+                          class="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-300"
+                          >MFA</span
+                        >
+                        <span v-if="user.emailVerified" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300"
+                          >已验证</span
+                        >
+                        <span
+                          class="text-xs px-2 py-0.5 rounded"
+                          :class="
+                            user.state === 'ACTIVE' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
+                          "
+                          >{{ user.state }}</span
+                        >
                       </div>
                     </div>
                     <div class="text-xs text-slate-400 mb-3">
                       创建时间: {{ user.createTime }}
-                      <span v-if="user.lastSuccessfulLoginTime" class="ml-4">最近登录: {{ user.lastSuccessfulLoginTime }}</span>
+                      <span v-if="user.lastSuccessfulLoginTime" class="ml-4"
+                        >最近登录: {{ user.lastSuccessfulLoginTime }}</span
+                      >
                     </div>
                     <div class="flex gap-2">
-                      <button @click="editUser(user)" class="btn btn-primary text-xs py-1" title="编辑用户">
+                      <button class="btn btn-primary text-xs py-1" title="编辑用户" @click="editUser(user)">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
                         </svg>
                         编辑
                       </button>
-                      <button @click="resetUserPassword(user)" class="btn btn-warning text-xs py-1" title="重置密码">
+                      <button class="btn btn-warning text-xs py-1" title="重置密码" @click="resetUserPassword(user)">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                          />
                         </svg>
                         重置密码
                       </button>
-                      <button v-if="user.isMfaActivated" @click="clearUserMfa(user)" class="btn btn-secondary text-xs py-1" title="清除MFA">
+                      <button
+                        v-if="user.isMfaActivated"
+                        class="btn btn-secondary text-xs py-1"
+                        title="清除MFA"
+                        @click="clearUserMfa(user)"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                          />
                         </svg>
                         清除MFA
                       </button>
-                      <button @click="clearUserApiKeys(user)" class="btn btn-secondary text-xs py-1" title="清除API密钥">
+                      <button
+                        class="btn btn-secondary text-xs py-1"
+                        title="清除API密钥"
+                        @click="clearUserApiKeys(user)"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"
+                          />
                         </svg>
                         清除API
                       </button>
-                      <button @click="deleteUser(user)" class="btn btn-danger text-xs py-1" title="删除用户">
+                      <button class="btn btn-danger text-xs py-1" title="删除用户" @click="deleteUser(user)">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
                         </svg>
                         删除
                       </button>
@@ -372,79 +573,207 @@
               <div v-if="loadingTab" class="text-center py-12">
                 <svg class="animate-spin h-12 w-12 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 <p class="text-slate-400 mt-4">加载中...</p>
               </div>
               <div v-else-if="!tabInstances?.length" class="card p-12 text-center">
-                <svg class="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                <svg
+                  class="w-16 h-16 mx-auto text-slate-600 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+                  />
                 </svg>
                 <p class="text-slate-400">暂无实例</p>
               </div>
               <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div v-for="instance in tabInstances" :key="instance.id" class="card p-5 hover:border-blue-500/50 transition-all">
+                <div
+                  v-for="instance in tabInstances"
+                  :key="instance.id"
+                  class="card p-5 hover:border-blue-500/50 transition-all"
+                >
                   <div class="flex justify-between items-start mb-3">
                     <div class="flex-1 min-w-0">
                       <h5 class="font-semibold text-white truncate">{{ instance.displayName }}</h5>
                       <p class="text-xs text-slate-400 font-mono truncate">{{ instance.id }}</p>
                     </div>
-                    <span class="badge ml-2 flex-shrink-0" :class="{ 'badge-success': instance.state === 'RUNNING', 'badge-danger': instance.state === 'STOPPED', 'badge-warning': !['RUNNING', 'STOPPED'].includes(instance.state) }">{{ instance.state }}</span>
+                    <span
+                      class="badge ml-2 flex-shrink-0"
+                      :class="{
+                        'badge-success': instance.state === 'RUNNING',
+                        'badge-danger': instance.state === 'STOPPED',
+                        'badge-warning': !['RUNNING', 'STOPPED'].includes(instance.state)
+                      }"
+                      >{{ instance.state }}</span
+                    >
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-sm mb-4">
-                    <div><span class="text-slate-400">规格:</span><span class="ml-2 text-white">{{ instance.shape }}</span></div>
-                    <div><span class="text-slate-400">CPU/内存:</span><span class="ml-2 text-white">{{ instance.ocpus }}核 / {{ instance.memory }}GB</span></div>
-                    <div><span class="text-slate-400">引导卷:</span><span class="ml-2 text-white">{{ instance.bootVolumeSize || '-' }} GB</span></div>
-                    <div><span class="text-slate-400">区域:</span><span class="ml-2 text-white">{{ instance.region }}</span></div>
-                    <div class="col-span-2"><span class="text-slate-400">公网IP:</span><span class="ml-2 text-white font-mono text-xs">{{ instance.publicIps?.join(', ') || '无' }}</span></div>
-                    <div v-if="instance.ipv6" class="col-span-2"><span class="text-slate-400">IPv6:</span><span class="ml-2 text-blue-300 font-mono text-xs">{{ instance.ipv6 }}</span></div>
-                    <div v-if="instance.imageName" class="col-span-2"><span class="text-slate-400">镜像:</span><span class="ml-2 text-white text-xs">{{ instance.imageName }}</span></div>
+                    <div>
+                      <span class="text-slate-400">规格:</span><span class="ml-2 text-white">{{ instance.shape }}</span>
+                    </div>
+                    <div>
+                      <span class="text-slate-400">CPU/内存:</span
+                      ><span class="ml-2 text-white">{{ instance.ocpus }}核 / {{ instance.memory }}GB</span>
+                    </div>
+                    <div>
+                      <span class="text-slate-400">引导卷:</span
+                      ><span class="ml-2 text-white">{{ instance.bootVolumeSize || '-' }} GB</span>
+                    </div>
+                    <div>
+                      <span class="text-slate-400">区域:</span
+                      ><span class="ml-2 text-white">{{ instance.region }}</span>
+                    </div>
+                    <div class="col-span-2">
+                      <span class="text-slate-400">公网IP:</span
+                      ><span class="ml-2 text-white font-mono text-xs">{{
+                        instance.publicIps?.join(', ') || '无'
+                      }}</span>
+                    </div>
+                    <div v-if="instance.ipv6" class="col-span-2">
+                      <span class="text-slate-400">IPv6:</span
+                      ><span class="ml-2 text-blue-300 font-mono text-xs">{{ instance.ipv6 }}</span>
+                    </div>
+                    <div v-if="instance.imageName" class="col-span-2">
+                      <span class="text-slate-400">镜像:</span
+                      ><span class="ml-2 text-white text-xs">{{ instance.imageName }}</span>
+                    </div>
                   </div>
                   <div class="space-y-2">
                     <div class="grid grid-cols-4 gap-2">
-                      <button @click="controlInstanceInDetails(instance.id, 'START')" class="btn btn-success text-xs py-1.5" :disabled="instance.state === 'RUNNING' || instanceActionLoading[instance.id]" title="启动">
+                      <button
+                        class="btn btn-success text-xs py-1.5"
+                        :disabled="instance.state === 'RUNNING' || instanceActionLoading[instance.id]"
+                        title="启动"
+                        @click="controlInstanceInDetails(instance.id, 'START')"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                          />
                         </svg>
                         启动
                       </button>
-                      <button @click="controlInstanceInDetails(instance.id, 'STOP')" class="btn btn-warning text-xs py-1.5" :disabled="instance.state !== 'RUNNING' || instanceActionLoading[instance.id]" title="停止">
+                      <button
+                        class="btn btn-warning text-xs py-1.5"
+                        :disabled="instance.state !== 'RUNNING' || instanceActionLoading[instance.id]"
+                        title="停止"
+                        @click="controlInstanceInDetails(instance.id, 'STOP')"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+                          />
                         </svg>
                         停止
                       </button>
-                      <button @click="controlInstanceInDetails(instance.id, 'SOFTRESET')" class="btn btn-secondary text-xs py-1.5" :disabled="instance.state !== 'RUNNING' || instanceActionLoading[instance.id]" title="重启">
+                      <button
+                        class="btn btn-secondary text-xs py-1.5"
+                        :disabled="instance.state !== 'RUNNING' || instanceActionLoading[instance.id]"
+                        title="重启"
+                        @click="controlInstanceInDetails(instance.id, 'SOFTRESET')"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
                         </svg>
                         重启
                       </button>
-                      <button @click="terminateInstanceInDetails(instance.id)" class="btn btn-danger text-xs py-1.5" :disabled="instanceActionLoading[instance.id]" title="删除">
+                      <button
+                        class="btn btn-danger text-xs py-1.5"
+                        :disabled="instanceActionLoading[instance.id]"
+                        title="删除"
+                        @click="terminateInstanceInDetails(instance.id)"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
                         </svg>
                         删除
                       </button>
                     </div>
                     <div class="grid grid-cols-3 gap-2">
-                      <button @click="changeIPInDetails(instance.id)" class="btn btn-info text-xs py-1.5" :disabled="instanceActionLoading[instance.id]" title="更改IP">
+                      <button
+                        class="btn btn-info text-xs py-1.5"
+                        :disabled="instanceActionLoading[instance.id]"
+                        title="更改IP"
+                        @click="changeIPInDetails(instance.id)"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                          />
                         </svg>
                         更改IP
                       </button>
-                      <button @click="showEditConfigDialog(instance)" class="btn btn-info text-xs py-1.5" :disabled="instanceActionLoading[instance.id]" title="编辑配置">
+                      <button
+                        class="btn btn-info text-xs py-1.5"
+                        :disabled="instanceActionLoading[instance.id]"
+                        title="编辑配置"
+                        @click="showEditConfigDialog(instance)"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
                         </svg>
                         编辑配置
                       </button>
-                      <button @click="showCloudShellDialog(instance.id)" class="btn btn-info text-xs py-1.5" :disabled="instanceActionLoading[instance.id]" title="Cloud Shell">
+                      <button
+                        class="btn btn-info text-xs py-1.5"
+                        :disabled="instanceActionLoading[instance.id]"
+                        title="Cloud Shell"
+                        @click="showCloudShellDialog(instance.id)"
+                      >
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                          />
                         </svg>
                         Cloud Shell
                       </button>
@@ -459,32 +788,75 @@
               <div v-if="loadingTab" class="text-center py-12">
                 <svg class="animate-spin h-12 w-12 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 <p class="text-slate-400 mt-4">加载中...</p>
               </div>
               <div v-else-if="!tabVolumes?.length" class="card p-12 text-center">
-                <svg class="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                <svg
+                  class="w-16 h-16 mx-auto text-slate-600 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                  />
                 </svg>
                 <p class="text-slate-400">暂无引导卷</p>
               </div>
               <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div v-for="volume in tabVolumes" :key="volume.id" class="border border-slate-600 rounded-lg p-4 hover:border-blue-500/50 transition-all">
+                <div
+                  v-for="volume in tabVolumes"
+                  :key="volume.id"
+                  class="border border-slate-600 rounded-lg p-4 hover:border-blue-500/50 transition-all"
+                >
                   <div class="flex justify-between items-start mb-2">
                     <h5 class="font-semibold text-white">{{ volume.displayName }}</h5>
                     <div class="flex gap-2">
-                      <span v-if="volume.attached" class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">已附加</span>
+                      <span v-if="volume.attached" class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-300"
+                        >已附加</span
+                      >
                       <span v-else class="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300">未附加</span>
-                      <span class="text-xs px-1.5 py-0.5 rounded" :class="{ 'bg-green-500/20 text-green-300': volume.state === 'AVAILABLE', 'bg-yellow-500/20 text-yellow-300': volume.state === 'PROVISIONING', 'bg-red-500/20 text-red-300': volume.state === 'FAULTY' }">{{ volume.state }}</span>
+                      <span
+                        class="text-xs px-1.5 py-0.5 rounded"
+                        :class="{
+                          'bg-green-500/20 text-green-300': volume.state === 'AVAILABLE',
+                          'bg-yellow-500/20 text-yellow-300': volume.state === 'PROVISIONING',
+                          'bg-red-500/20 text-red-300': volume.state === 'FAULTY'
+                        }"
+                        >{{ volume.state }}</span
+                      >
                     </div>
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-sm">
-                    <div><span class="text-slate-400">大小:</span><span class="ml-2 text-white">{{ volume.sizeInGBs }} GB</span></div>
-                    <div><span class="text-slate-400">性能:</span><span class="ml-2 text-white">{{ volume.vpusPerGB || 10 }} VPU/GB</span></div>
-                    <div v-if="volume.instanceName" class="col-span-2"><span class="text-slate-400">附加实例:</span><span class="ml-2 text-blue-300">{{ volume.instanceName }}</span></div>
-                    <div v-if="volume.availabilityDomain" class="col-span-2"><span class="text-slate-400">可用域:</span><span class="ml-2 text-white text-xs">{{ volume.availabilityDomain }}</span></div>
-                    <div v-if="volume.createTime" class="col-span-2"><span class="text-slate-400">创建时间:</span><span class="ml-2 text-white text-xs">{{ volume.createTime }}</span></div>
+                    <div>
+                      <span class="text-slate-400">大小:</span
+                      ><span class="ml-2 text-white">{{ volume.sizeInGBs }} GB</span>
+                    </div>
+                    <div>
+                      <span class="text-slate-400">性能:</span
+                      ><span class="ml-2 text-white">{{ volume.vpusPerGB || 10 }} VPU/GB</span>
+                    </div>
+                    <div v-if="volume.instanceName" class="col-span-2">
+                      <span class="text-slate-400">附加实例:</span
+                      ><span class="ml-2 text-blue-300">{{ volume.instanceName }}</span>
+                    </div>
+                    <div v-if="volume.availabilityDomain" class="col-span-2">
+                      <span class="text-slate-400">可用域:</span
+                      ><span class="ml-2 text-white text-xs">{{ volume.availabilityDomain }}</span>
+                    </div>
+                    <div v-if="volume.createTime" class="col-span-2">
+                      <span class="text-slate-400">创建时间:</span
+                      ><span class="ml-2 text-white text-xs">{{ volume.createTime }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -495,13 +867,27 @@
               <div v-if="loadingTab" class="text-center py-12">
                 <svg class="animate-spin h-12 w-12 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 <p class="text-slate-400 mt-4">加载中...</p>
               </div>
               <div v-else-if="!tabVCNs?.length" class="card p-12 text-center">
-                <svg class="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                <svg
+                  class="w-16 h-16 mx-auto text-slate-600 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                  />
                 </svg>
                 <p class="text-slate-400">暂无VCN</p>
               </div>
@@ -512,15 +898,23 @@
                     <span class="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300">{{ vcn.state }}</span>
                   </div>
                   <div class="space-y-1 text-sm">
-                    <div><span class="text-slate-400">CIDR:</span><span class="ml-2 text-white font-mono">{{ vcn.cidrBlock }}</span></div>
-                    <div v-if="vcn.createTime"><span class="text-slate-400">创建时间:</span><span class="ml-2 text-white">{{ vcn.createTime }}</span></div>
+                    <div>
+                      <span class="text-slate-400">CIDR:</span
+                      ><span class="ml-2 text-white font-mono">{{ vcn.cidrBlock }}</span>
+                    </div>
+                    <div v-if="vcn.createTime">
+                      <span class="text-slate-400">创建时间:</span
+                      ><span class="ml-2 text-white">{{ vcn.createTime }}</span>
+                    </div>
                     <div v-if="vcn.subnets?.length" class="mt-2">
                       <span class="text-slate-400 block mb-2">子网 ({{ vcn.subnets.length }}个):</span>
                       <div class="pl-4 space-y-1">
                         <div v-for="subnet in vcn.subnets" :key="subnet.id" class="text-xs bg-slate-700/50 rounded p-2">
                           <div class="flex justify-between">
                             <span class="text-white">{{ subnet.displayName }}</span>
-                            <span :class="subnet.isPublic ? 'text-green-400' : 'text-yellow-400'">{{ subnet.isPublic ? '公有' : '私有' }}</span>
+                            <span :class="subnet.isPublic ? 'text-green-400' : 'text-yellow-400'">{{
+                              subnet.isPublic ? '公有' : '私有'
+                            }}</span>
                           </div>
                           <div class="text-slate-400">{{ subnet.cidrBlock }}</div>
                         </div>
@@ -541,32 +935,52 @@
                       <label class="block text-sm text-slate-400 mb-1">选择实例</label>
                       <select v-model="trafficForm.instanceId" class="input text-sm">
                         <option value="">请选择实例</option>
-                        <option v-for="inst in trafficCondition.instances" :key="inst.value" :value="inst.value">{{ inst.label }}</option>
+                        <option v-for="inst in trafficCondition.instances" :key="inst.value" :value="inst.value">
+                          {{ inst.label }}
+                        </option>
                       </select>
                     </div>
                     <div>
                       <label class="block text-sm text-slate-400 mb-1">选择VNIC</label>
                       <select v-model="trafficForm.vnicId" class="input text-sm" :disabled="!trafficVnics.length">
                         <option value="">请选择VNIC</option>
-                        <option v-for="vnic in trafficVnics" :key="vnic.value" :value="vnic.value">{{ vnic.label }}</option>
+                        <option v-for="vnic in trafficVnics" :key="vnic.value" :value="vnic.value">
+                          {{ vnic.label }}
+                        </option>
                       </select>
                     </div>
                     <div>
                       <label class="block text-sm text-slate-400 mb-1">开始时间</label>
-                      <input type="text" v-model="trafficForm.startTime" class="input text-sm" placeholder="YYYY-MM-DD HH:mm:ss" />
+                      <input
+                        v-model="trafficForm.startTime"
+                        type="text"
+                        class="input text-sm"
+                        placeholder="YYYY-MM-DD HH:mm:ss"
+                      />
                     </div>
                     <div>
                       <label class="block text-sm text-slate-400 mb-1">结束时间</label>
-                      <input type="text" v-model="trafficForm.endTime" class="input text-sm" placeholder="YYYY-MM-DD HH:mm:ss" />
+                      <input
+                        v-model="trafficForm.endTime"
+                        type="text"
+                        class="input text-sm"
+                        placeholder="YYYY-MM-DD HH:mm:ss"
+                      />
                     </div>
                   </div>
-                  <button @click="loadTrafficData" class="btn btn-primary mt-4" :disabled="loadingTraffic">{{ loadingTraffic ? '查询中...' : '查询流量' }}</button>
+                  <button class="btn btn-primary mt-4" :disabled="loadingTraffic" @click="loadTrafficData">
+                    {{ loadingTraffic ? '查询中...' : '查询流量' }}
+                  </button>
                 </div>
 
                 <div v-if="loadingTraffic" class="text-center py-12">
                   <svg class="animate-spin h-12 w-12 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   <p class="text-slate-400 mt-4">加载中...</p>
                 </div>
@@ -592,8 +1006,18 @@
                   </div>
                 </div>
                 <div v-else class="card p-12 text-center">
-                  <svg class="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  <svg
+                    class="w-16 h-16 mx-auto text-slate-600 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
                   </svg>
                   <p class="text-slate-400">请选择实例和VNIC后查询流量数据</p>
                 </div>
@@ -605,22 +1029,29 @@
     </div>
 
     <!-- 创建实例弹窗 -->
-    <div v-if="showCreateInstanceModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      v-if="showCreateInstanceModal"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-700 flex justify-between items-center">
           <h3 class="text-xl font-bold">创建实例任务</h3>
-          <button @click="closeInstanceModal" class="text-slate-400 hover:text-white">
+          <button class="text-slate-400 hover:text-white" @click="closeInstanceModal">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form @submit.prevent="submitInstanceTask" class="p-6 space-y-4">
+        <form class="p-6 space-y-4" @submit.prevent="submitInstanceTask">
           <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
             <p class="text-sm text-blue-300">
               <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                <path
+                  fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clip-rule="evenodd"
+                />
               </svg>
               为配置 <strong>{{ selectedConfigForInstance?.username }}</strong> 创建实例
             </p>
@@ -628,7 +1059,13 @@
 
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">区域</label>
-            <input v-model="instanceForm.ociRegion" type="text" class="input" placeholder="例: ap-singapore-1" required />
+            <input
+              v-model="instanceForm.ociRegion"
+              type="text"
+              class="input"
+              placeholder="例: ap-singapore-1"
+              required
+            />
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -671,30 +1108,39 @@
           </div>
 
           <div class="flex gap-3 pt-4">
-            <button type="button" @click="closeInstanceModal" class="btn btn-secondary flex-1">取消</button>
-            <button type="submit" class="btn btn-primary flex-1" :disabled="submittingInstance">{{ submittingInstance ? '创建中...' : '创建任务' }}</button>
+            <button type="button" class="btn btn-secondary flex-1" @click="closeInstanceModal">取消</button>
+            <button type="submit" class="btn btn-primary flex-1" :disabled="submittingInstance">
+              {{ submittingInstance ? '创建中...' : '创建任务' }}
+            </button>
           </div>
         </form>
       </div>
     </div>
 
     <!-- 编辑用户弹窗 -->
-    <div v-if="showEditUserModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      v-if="showEditUserModal"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div class="card max-w-md w-full">
         <div class="p-6 border-b border-slate-700 flex justify-between items-center">
           <h3 class="text-xl font-bold">编辑用户信息</h3>
-          <button @click="closeEditUserModal" class="text-slate-400 hover:text-white">
+          <button class="text-slate-400 hover:text-white" @click="closeEditUserModal">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form @submit.prevent="saveUserInfo" class="p-6 space-y-4">
+        <form class="p-6 space-y-4" @submit.prevent="saveUserInfo">
           <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
             <p class="text-sm text-blue-300">
               <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                <path
+                  fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clip-rule="evenodd"
+                />
               </svg>
               编辑用户 <strong>{{ editingUser?.name }}</strong>
             </p>
@@ -716,7 +1162,7 @@
           </div>
 
           <div class="flex gap-3 pt-4">
-            <button type="button" @click="closeEditUserModal" class="btn btn-secondary flex-1">取消</button>
+            <button type="button" class="btn btn-secondary flex-1" @click="closeEditUserModal">取消</button>
             <button type="submit" class="btn btn-primary flex-1">保存</button>
           </div>
         </form>
@@ -724,22 +1170,29 @@
     </div>
 
     <!-- 编辑实例配置弹窗 -->
-    <div v-if="editConfigDialogVisible" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      v-if="editConfigDialogVisible"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div class="card max-w-md w-full">
         <div class="p-6 border-b border-slate-700 flex justify-between items-center">
           <h3 class="text-xl font-bold">编辑实例配置</h3>
-          <button @click="editConfigDialogVisible = false" class="text-slate-400 hover:text-white">
+          <button class="text-slate-400 hover:text-white" @click="editConfigDialogVisible = false">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form @submit.prevent="updateInstanceConfig" class="p-6 space-y-4">
+        <form class="p-6 space-y-4" @submit.prevent="updateInstanceConfig">
           <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
             <p class="text-sm text-yellow-300">
               <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                <path
+                  fill-rule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clip-rule="evenodd"
+                />
               </svg>
               注意：修改配置需要停止实例
             </p>
@@ -752,23 +1205,37 @@
 
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">内存 (GB)</label>
-            <input v-model.number="editConfigForm.memoryInGBs" type="number" min="1" max="1024" class="input" required />
+            <input
+              v-model.number="editConfigForm.memoryInGBs"
+              type="number"
+              min="1"
+              max="1024"
+              class="input"
+              required
+            />
           </div>
 
           <div class="flex gap-3 pt-4">
-            <button type="button" @click="editConfigDialogVisible = false" class="btn btn-secondary flex-1">取消</button>
-            <button type="submit" class="btn btn-primary flex-1" :disabled="configUpdating">{{ configUpdating ? '更新中...' : '保存' }}</button>
+            <button type="button" class="btn btn-secondary flex-1" @click="editConfigDialogVisible = false">
+              取消
+            </button>
+            <button type="submit" class="btn btn-primary flex-1" :disabled="configUpdating">
+              {{ configUpdating ? '更新中...' : '保存' }}
+            </button>
           </div>
         </form>
       </div>
     </div>
 
     <!-- Cloud Shell弹窗 -->
-    <div v-if="cloudShellDialogVisible" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      v-if="cloudShellDialogVisible"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div class="card max-w-2xl w-full">
         <div class="p-6 border-b border-slate-700 flex justify-between items-center">
           <h3 class="text-xl font-bold">Cloud Shell 连接</h3>
-          <button @click="cloudShellDialogVisible = false" class="text-slate-400 hover:text-white">
+          <button class="text-slate-400 hover:text-white" @click="cloudShellDialogVisible = false">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -779,7 +1246,11 @@
           <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
             <p class="text-sm text-blue-300">
               <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                <path
+                  fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clip-rule="evenodd"
+                />
               </svg>
               请提供SSH公钥以创建Cloud Shell连接
             </p>
@@ -787,7 +1258,12 @@
 
           <div v-if="!cloudShellResult.connectionString">
             <label class="block text-sm font-medium text-slate-300 mb-2">SSH 公钥</label>
-            <textarea v-model="cloudShellForm.publicKey" class="input min-h-[120px] font-mono text-xs" placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..." required></textarea>
+            <textarea
+              v-model="cloudShellForm.publicKey"
+              class="input min-h-[120px] font-mono text-xs"
+              placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."
+              required
+            ></textarea>
             <p class="text-xs text-slate-400 mt-2">粘贴您的 SSH 公钥（通常位于 ~/.ssh/id_rsa.pub）</p>
           </div>
 
@@ -795,10 +1271,19 @@
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-2">连接ID</label>
               <div class="flex gap-2">
-                <input :value="cloudShellResult.connectionId" readonly class="input flex-1 font-mono text-xs bg-slate-700/50" />
-                <button @click="copyToClipboard(cloudShellResult.connectionId)" class="btn btn-secondary" title="复制">
+                <input
+                  :value="cloudShellResult.connectionId"
+                  readonly
+                  class="input flex-1 font-mono text-xs bg-slate-700/50"
+                />
+                <button class="btn btn-secondary" title="复制" @click="copyToClipboard(cloudShellResult.connectionId)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
                   </svg>
                 </button>
               </div>
@@ -807,10 +1292,23 @@
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-2">连接字符串</label>
               <div class="flex gap-2">
-                <input :value="cloudShellResult.connectionString" readonly class="input flex-1 font-mono text-xs bg-slate-700/50" />
-                <button @click="copyToClipboard(cloudShellResult.connectionString)" class="btn btn-secondary" title="复制">
+                <input
+                  :value="cloudShellResult.connectionString"
+                  readonly
+                  class="input flex-1 font-mono text-xs bg-slate-700/50"
+                />
+                <button
+                  class="btn btn-secondary"
+                  title="复制"
+                  @click="copyToClipboard(cloudShellResult.connectionString)"
+                >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
                   </svg>
                 </button>
               </div>
@@ -819,7 +1317,11 @@
             <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
               <p class="text-sm text-green-300">
                 <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
                 连接创建成功！请使用SSH客户端连接。
               </p>
@@ -827,8 +1329,17 @@
           </div>
 
           <div class="flex gap-3 pt-4">
-            <button type="button" @click="cloudShellDialogVisible = false" class="btn btn-secondary flex-1">关闭</button>
-            <button v-if="!cloudShellResult.connectionString" @click="createCloudShell" class="btn btn-primary flex-1" :disabled="cloudShellCreating || !cloudShellForm.publicKey.trim()">{{ cloudShellCreating ? '创建中...' : '创建连接' }}</button>
+            <button type="button" class="btn btn-secondary flex-1" @click="cloudShellDialogVisible = false">
+              关闭
+            </button>
+            <button
+              v-if="!cloudShellResult.connectionString"
+              class="btn btn-primary flex-1"
+              :disabled="cloudShellCreating || !cloudShellForm.publicKey.trim()"
+              @click="createCloudShell"
+            >
+              {{ cloudShellCreating ? '创建中...' : '创建连接' }}
+            </button>
           </div>
         </div>
       </div>
@@ -925,10 +1436,10 @@ const cloudShellResult = reactive({ connectionId: '', connectionString: '' })
 const parseConfigContent = (content) => {
   const lines = content.split('\n')
   const config = {}
-  lines.forEach(line => {
+  lines.forEach((line) => {
     const trimmed = line.trim()
     if (trimmed && trimmed.includes('=')) {
-      const [key, value] = trimmed.split('=').map(s => s.trim())
+      const [key, value] = trimmed.split('=').map((s) => s.trim())
       config[key] = value
     }
   })
@@ -952,11 +1463,14 @@ const formatDateTime = (date) => {
 }
 
 const copyToClipboard = (text) => {
-  navigator.clipboard.writeText(text).then(() => {
-    toast.success('已复制到剪贴板')
-  }).catch(() => {
-    toast.error('复制失败')
-  })
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      toast.success('已复制到剪贴板')
+    })
+    .catch(() => {
+      toast.error('复制失败')
+    })
 }
 
 // 配置列表操作
@@ -999,7 +1513,9 @@ const handleFileDrop = (event) => {
   }
 }
 
-const clearFile = () => { uploadedFile.value = null }
+const clearFile = () => {
+  uploadedFile.value = null
+}
 
 const submitForm = async () => {
   if (!uploadedFile.value && !editingConfig.value) {
@@ -1012,7 +1528,9 @@ const submitForm = async () => {
     if (uploadedFile.value) {
       const formData = new FormData()
       formData.append('file', uploadedFile.value)
-      const uploadResponse = await api.post('/oci/uploadKey', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const uploadResponse = await api.post('/oci/uploadKey', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
       keyPath = uploadResponse.data
     }
     const parsedConfig = parseConfigContent(form.value.configContent)
@@ -1026,7 +1544,11 @@ const submitForm = async () => {
       ociKeyPath: keyPath
     }
     if (editingConfig.value) {
-      await api.post('/oci/updateCfgName', { id: editingConfig.value.id, username: payload.username, ociKeyPath: uploadedFile.value ? keyPath : undefined })
+      await api.post('/oci/updateCfgName', {
+        id: editingConfig.value.id,
+        username: payload.username,
+        ociKeyPath: uploadedFile.value ? keyPath : undefined
+      })
       toast.success('更新成功')
     } else {
       await api.post('/oci/addCfg', payload)
@@ -1073,7 +1595,15 @@ const createInstance = (config) => {
 const closeInstanceModal = () => {
   showCreateInstanceModal.value = false
   selectedConfigForInstance.value = null
-  instanceForm.value = { ociRegion: '', ocpus: 1, memory: 6, disk: 50, architecture: 'ARM', operationSystem: 'Ubuntu', rootPassword: '' }
+  instanceForm.value = {
+    ociRegion: '',
+    ocpus: 1,
+    memory: 6,
+    disk: 50,
+    architecture: 'ARM',
+    operationSystem: 'Ubuntu',
+    rootPassword: ''
+  }
 }
 
 const submitInstanceTask = async () => {
@@ -1199,7 +1729,9 @@ const loadTrafficCondition = async () => {
 const loadInstanceVnics = async () => {
   if (!configDetails.value || !trafficForm.value.instanceId) return
   try {
-    const response = await api.get('/oci/traffic/vnics', { params: { configId: configDetails.value.userId, instanceId: trafficForm.value.instanceId } })
+    const response = await api.get('/oci/traffic/vnics', {
+      params: { configId: configDetails.value.userId, instanceId: trafficForm.value.instanceId }
+    })
     trafficVnics.value = response.data || []
     trafficForm.value.vnicId = ''
   } catch (error) {
@@ -1248,13 +1780,16 @@ watch(activeTab, () => {
   else if (activeTab.value === 'traffic' && trafficCondition.value.instances.length === 0) loadTrafficCondition()
 })
 
-watch(() => trafficForm.value.instanceId, (newVal) => {
-  if (newVal) loadInstanceVnics()
-  else {
-    trafficVnics.value = []
-    trafficForm.value.vnicId = ''
+watch(
+  () => trafficForm.value.instanceId,
+  (newVal) => {
+    if (newVal) loadInstanceVnics()
+    else {
+      trafficVnics.value = []
+      trafficForm.value.vnicId = ''
+    }
   }
-})
+)
 
 // 密码过期时间编辑
 const startEditPasswordExpiry = () => {
@@ -1270,7 +1805,10 @@ const cancelEditPasswordExpiry = () => {
 const savePasswordExpiry = async () => {
   updatingPasswordExpiry.value = true
   try {
-    await api.post('/oci/tenant/updatePwdEx', { cfgId: configDetails.value.userId, passwordExpiresAfter: passwordExpiryInput.value })
+    await api.post('/oci/tenant/updatePwdEx', {
+      cfgId: configDetails.value.userId,
+      passwordExpiresAfter: passwordExpiryInput.value
+    })
     toast.success('密码过期时间更新成功')
     tabTenant.value.passwordExpiresAfter = passwordExpiryInput.value
     editingPasswordExpiry.value = false
@@ -1297,7 +1835,13 @@ const closeEditUserModal = () => {
 const saveUserInfo = async () => {
   if (!editingUser.value) return
   try {
-    await api.post('/oci/tenant/updateUserInfo', { ociCfgId: configDetails.value.userId, userId: editingUser.value.id, email: userForm.value.email, dbUserName: userForm.value.dbUserName, description: userForm.value.description })
+    await api.post('/oci/tenant/updateUserInfo', {
+      ociCfgId: configDetails.value.userId,
+      userId: editingUser.value.id,
+      email: userForm.value.email,
+      dbUserName: userForm.value.dbUserName,
+      description: userForm.value.description
+    })
     toast.success('用户信息更新成功')
     closeEditUserModal()
     await loadTenant(true)
@@ -1351,9 +1895,9 @@ const deleteUser = async (user) => {
 // 实例操作
 const controlInstanceInDetails = async (instanceId, action) => {
   const actionMap = {
-    'START': { endpoint: '/instance/start', message: '启动' },
-    'STOP': { endpoint: '/instance/stop', message: '停止' },
-    'SOFTRESET': { endpoint: '/instance/reboot', message: '重启' }
+    START: { endpoint: '/instance/start', message: '启动' },
+    STOP: { endpoint: '/instance/stop', message: '停止' },
+    SOFTRESET: { endpoint: '/instance/reboot', message: '重启' }
   }
   instanceActionLoading[instanceId] = true
   try {
@@ -1414,7 +1958,12 @@ const updateInstanceConfig = async () => {
   }
   configUpdating.value = true
   try {
-    const response = await api.post('/instance/updateConfig', { userId: configDetails.value.userId, instanceId: editConfigForm.instanceId, ocpus: editConfigForm.ocpus, memoryInGBs: editConfigForm.memoryInGBs })
+    const response = await api.post('/instance/updateConfig', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId,
+      ocpus: editConfigForm.ocpus,
+      memoryInGBs: editConfigForm.memoryInGBs
+    })
     if (response.data && response.data.code === 200) {
       toast.success('实例配置更新成功')
       editConfigDialogVisible.value = false
@@ -1445,7 +1994,11 @@ const createCloudShell = async () => {
   }
   cloudShellCreating.value = true
   try {
-    const response = await api.post('/instance/createCloudShell', { userId: configDetails.value.userId, instanceId: cloudShellForm.instanceId, publicKey: cloudShellForm.publicKey })
+    const response = await api.post('/instance/createCloudShell', {
+      userId: configDetails.value.userId,
+      instanceId: cloudShellForm.instanceId,
+      publicKey: cloudShellForm.publicKey
+    })
     if (response.data && response.data.code === 200) {
       cloudShellResult.connectionId = response.data.data.connectionId
       cloudShellResult.connectionString = response.data.data.connectionString

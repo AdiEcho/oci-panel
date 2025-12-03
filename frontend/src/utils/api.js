@@ -35,13 +35,13 @@ api.interceptors.response.use(
   (error) => {
     if (error.response) {
       const { status, data } = error.response
-      
+
       if (status === 401) {
         const authStore = useAuthStore()
         authStore.logout()
         window.location.href = '/login'
       }
-      
+
       return Promise.reject(new Error(data.message || error.message))
     }
     return Promise.reject(error)
