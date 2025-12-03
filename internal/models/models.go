@@ -164,7 +164,7 @@ type OciCreateTask struct {
 	Architecture    string    `gorm:"column:architecture;default:ARM" json:"architecture"`
 	Interval        int       `gorm:"column:interval;default:60" json:"interval"`
 	CreateNumbers   int       `gorm:"column:create_numbers;default:1" json:"createNumbers"`
-	RootPassword    string    `gorm:"column:root_password" json:"rootPassword"`
+	SSHKeyID        string    `gorm:"column:ssh_key_id" json:"sshKeyId"`
 	OperationSystem string    `gorm:"column:operation_system;default:Ubuntu" json:"operationSystem"`
 	CreateTime      time.Time `gorm:"column:create_time;autoCreateTime" json:"createTime"`
 }
@@ -243,6 +243,32 @@ func (OciConfigCache) TableName() string {
 	return "oci_config_cache"
 }
 
+// SSHKey SSH密钥表
+type SSHKey struct {
+	ID         string    `gorm:"primaryKey;column:id" json:"id"`
+	Name       string    `gorm:"column:name;not null" json:"name"`
+	PublicKey  string    `gorm:"column:public_key;type:text;not null" json:"publicKey"`
+	PrivateKey string    `gorm:"column:private_key;type:text" json:"privateKey"`
+	KeyType    string    `gorm:"column:key_type;not null" json:"keyType"` // config: 配置关联, standalone: 独立上传
+	ConfigID   string    `gorm:"column:config_id" json:"configId"`        // 关联的配置ID，独立上传时为空
+	CreateTime time.Time `gorm:"column:create_time;autoCreateTime" json:"createTime"`
+}
+
+func (SSHKey) TableName() string {
+	return "ssh_key"
+}
+
+// SSHKeyResponse SSH密钥响应
+type SSHKeyResponse struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	PublicKey  string `json:"publicKey"`
+	KeyType    string `json:"keyType"`
+	ConfigID   string `json:"configId"`
+	ConfigName string `json:"configName"`
+	CreateTime string `json:"createTime"`
+}
+
 type ResponseData struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
@@ -276,5 +302,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&IpData{},
 		&SysSetting{},
 		&OciConfigCache{},
+		&SSHKey{},
 	)
 }

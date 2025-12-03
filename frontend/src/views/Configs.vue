@@ -441,8 +441,7 @@
                       v-for="region in tabTenant.regions"
                       :key="region"
                       class="px-2 py-1 text-xs rounded bg-blue-500/20 text-blue-300"
-                      >{{ region }}</span
-                    >
+                    >{{ region }}</span>
                   </div>
                 </div>
               </div>
@@ -477,25 +476,19 @@
                         <span
                           v-if="user.isMfaActivated"
                           class="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-300"
-                          >MFA</span
-                        >
-                        <span v-if="user.emailVerified" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300"
-                          >已验证</span
-                        >
+                        >MFA</span>
+                        <span v-if="user.emailVerified" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">已验证</span>
                         <span
                           class="text-xs px-2 py-0.5 rounded"
                           :class="
                             user.state === 'ACTIVE' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
                           "
-                          >{{ user.state }}</span
-                        >
+                        >{{ user.state }}</span>
                       </div>
                     </div>
                     <div class="text-xs text-slate-400 mb-3">
                       创建时间: {{ user.createTime }}
-                      <span v-if="user.lastSuccessfulLoginTime" class="ml-4"
-                        >最近登录: {{ user.lastSuccessfulLoginTime }}</span
-                      >
+                      <span v-if="user.lastSuccessfulLoginTime" class="ml-4">最近登录: {{ user.lastSuccessfulLoginTime }}</span>
                     </div>
                     <div class="flex gap-2">
                       <button class="btn btn-primary text-xs py-1" title="编辑用户" @click="editUser(user)">
@@ -615,38 +608,31 @@
                         'badge-danger': instance.state === 'STOPPED',
                         'badge-warning': !['RUNNING', 'STOPPED'].includes(instance.state)
                       }"
-                      >{{ instance.state }}</span
-                    >
+                    >{{ instance.state }}</span>
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-sm mb-4">
                     <div>
                       <span class="text-slate-400">规格:</span><span class="ml-2 text-white">{{ instance.shape }}</span>
                     </div>
                     <div>
-                      <span class="text-slate-400">CPU/内存:</span
-                      ><span class="ml-2 text-white">{{ instance.ocpus }}核 / {{ instance.memory }}GB</span>
+                      <span class="text-slate-400">CPU/内存:</span><span class="ml-2 text-white">{{ instance.ocpus }}核 / {{ instance.memory }}GB</span>
                     </div>
                     <div>
-                      <span class="text-slate-400">引导卷:</span
-                      ><span class="ml-2 text-white">{{ instance.bootVolumeSize || '-' }} GB</span>
+                      <span class="text-slate-400">引导卷:</span><span class="ml-2 text-white">{{ instance.bootVolumeSize || '-' }} GB</span>
                     </div>
                     <div>
-                      <span class="text-slate-400">区域:</span
-                      ><span class="ml-2 text-white">{{ instance.region }}</span>
+                      <span class="text-slate-400">区域:</span><span class="ml-2 text-white">{{ instance.region }}</span>
                     </div>
                     <div class="col-span-2">
-                      <span class="text-slate-400">公网IP:</span
-                      ><span class="ml-2 text-white font-mono text-xs">{{
+                      <span class="text-slate-400">公网IP:</span><span class="ml-2 text-white font-mono text-xs">{{
                         instance.publicIps?.join(', ') || '无'
                       }}</span>
                     </div>
                     <div v-if="instance.ipv6" class="col-span-2">
-                      <span class="text-slate-400">IPv6:</span
-                      ><span class="ml-2 text-blue-300 font-mono text-xs">{{ instance.ipv6 }}</span>
+                      <span class="text-slate-400">IPv6:</span><span class="ml-2 text-blue-300 font-mono text-xs">{{ instance.ipv6 }}</span>
                     </div>
                     <div v-if="instance.imageName" class="col-span-2">
-                      <span class="text-slate-400">镜像:</span
-                      ><span class="ml-2 text-white text-xs">{{ instance.imageName }}</span>
+                      <span class="text-slate-400">镜像:</span><span class="ml-2 text-white text-xs">{{ instance.imageName }}</span>
                     </div>
                   </div>
                   <div class="space-y-2">
@@ -821,9 +807,7 @@
                   <div class="flex justify-between items-start mb-2">
                     <h5 class="font-semibold text-white">{{ volume.displayName }}</h5>
                     <div class="flex gap-2">
-                      <span v-if="volume.attached" class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-300"
-                        >已附加</span
-                      >
+                      <span v-if="volume.attached" class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">已附加</span>
                       <span v-else class="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300">未附加</span>
                       <span
                         class="text-xs px-1.5 py-0.5 rounded"
@@ -832,30 +816,24 @@
                           'bg-yellow-500/20 text-yellow-300': volume.state === 'PROVISIONING',
                           'bg-red-500/20 text-red-300': volume.state === 'FAULTY'
                         }"
-                        >{{ volume.state }}</span
-                      >
+                      >{{ volume.state }}</span>
                     </div>
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-sm">
                     <div>
-                      <span class="text-slate-400">大小:</span
-                      ><span class="ml-2 text-white">{{ volume.sizeInGBs }} GB</span>
+                      <span class="text-slate-400">大小:</span><span class="ml-2 text-white">{{ volume.sizeInGBs }} GB</span>
                     </div>
                     <div>
-                      <span class="text-slate-400">性能:</span
-                      ><span class="ml-2 text-white">{{ volume.vpusPerGB || 10 }} VPU/GB</span>
+                      <span class="text-slate-400">性能:</span><span class="ml-2 text-white">{{ volume.vpusPerGB || 10 }} VPU/GB</span>
                     </div>
                     <div v-if="volume.instanceName" class="col-span-2">
-                      <span class="text-slate-400">附加实例:</span
-                      ><span class="ml-2 text-blue-300">{{ volume.instanceName }}</span>
+                      <span class="text-slate-400">附加实例:</span><span class="ml-2 text-blue-300">{{ volume.instanceName }}</span>
                     </div>
                     <div v-if="volume.availabilityDomain" class="col-span-2">
-                      <span class="text-slate-400">可用域:</span
-                      ><span class="ml-2 text-white text-xs">{{ volume.availabilityDomain }}</span>
+                      <span class="text-slate-400">可用域:</span><span class="ml-2 text-white text-xs">{{ volume.availabilityDomain }}</span>
                     </div>
                     <div v-if="volume.createTime" class="col-span-2">
-                      <span class="text-slate-400">创建时间:</span
-                      ><span class="ml-2 text-white text-xs">{{ volume.createTime }}</span>
+                      <span class="text-slate-400">创建时间:</span><span class="ml-2 text-white text-xs">{{ volume.createTime }}</span>
                     </div>
                   </div>
                 </div>
@@ -899,12 +877,10 @@
                   </div>
                   <div class="space-y-1 text-sm">
                     <div>
-                      <span class="text-slate-400">CIDR:</span
-                      ><span class="ml-2 text-white font-mono">{{ vcn.cidrBlock }}</span>
+                      <span class="text-slate-400">CIDR:</span><span class="ml-2 text-white font-mono">{{ vcn.cidrBlock }}</span>
                     </div>
                     <div v-if="vcn.createTime">
-                      <span class="text-slate-400">创建时间:</span
-                      ><span class="ml-2 text-white">{{ vcn.createTime }}</span>
+                      <span class="text-slate-400">创建时间:</span><span class="ml-2 text-white">{{ vcn.createTime }}</span>
                     </div>
                     <div v-if="vcn.subnets?.length" class="mt-2">
                       <span class="text-slate-400 block mb-2">子网 ({{ vcn.subnets.length }}个):</span>
@@ -1103,8 +1079,14 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Root密码</label>
-            <input v-model="instanceForm.rootPassword" type="password" class="input" required />
+            <label class="block text-sm font-medium text-slate-300 mb-2">SSH公钥</label>
+            <select v-model="instanceForm.sshKeyId" class="input" required>
+              <option value="">请选择SSH公钥</option>
+              <option v-for="key in sshKeys" :key="key.id" :value="key.id">{{ key.name }}</option>
+            </select>
+            <p class="text-xs text-slate-400 mt-2">
+              请先在 <router-link to="/keys" class="text-blue-400 hover:underline">密钥管理</router-link> 中添加SSH公钥
+            </p>
           </div>
 
           <div class="flex gap-3 pt-4">
@@ -1422,8 +1404,10 @@ const instanceForm = ref({
   disk: 50,
   architecture: 'ARM',
   operationSystem: 'Ubuntu',
-  rootPassword: ''
+  sshKeyId: ''
 })
+
+const sshKeys = ref([])
 
 const userForm = ref({ email: '', dbUserName: '', description: '' })
 
@@ -1585,10 +1569,22 @@ const deleteConfig = async (id) => {
   }
 }
 
+// 加载SSH密钥列表
+const loadSSHKeys = async () => {
+  try {
+    const response = await api.get('/key/standalone')
+    sshKeys.value = response.data || []
+  } catch (error) {
+    console.error('加载SSH密钥失败:', error)
+    sshKeys.value = []
+  }
+}
+
 // 创建实例
-const createInstance = (config) => {
+const createInstance = async (config) => {
   selectedConfigForInstance.value = config
   instanceForm.value.ociRegion = config.ociRegion
+  await loadSSHKeys()
   showCreateInstanceModal.value = true
 }
 
@@ -1602,7 +1598,7 @@ const closeInstanceModal = () => {
     disk: 50,
     architecture: 'ARM',
     operationSystem: 'Ubuntu',
-    rootPassword: ''
+    sshKeyId: ''
   }
 }
 

@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/adiecho/oci-panel/internal/database"
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/adiecho/oci-panel/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/oracle/oci-go-sdk/v65/core"
-	"net/http"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 type OciController struct {
@@ -244,13 +245,20 @@ type CreateInstanceRequest struct {
 	Disk            int     `json:"disk"`
 	Architecture    string  `json:"architecture"`
 	OperationSystem string  `json:"operationSystem"`
-	RootPassword    string  `json:"rootPassword"`
+	SSHKeyID        string  `json:"sshKeyId" binding:"required"`
 }
 
 func (oc *OciController) CreateInstance(c *gin.Context) {
 	var req CreateInstanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	// 验证SSH密钥是否存在
+	var sshKey models.SSHKey
+	if err := database.GetDB().First(&sshKey, "id = ?", req.SSHKeyID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "SSH密钥不存在"))
 		return
 	}
 
@@ -263,7 +271,7 @@ func (oc *OciController) CreateInstance(c *gin.Context) {
 		Disk:            req.Disk,
 		Architecture:    req.Architecture,
 		OperationSystem: req.OperationSystem,
-		RootPassword:    req.RootPassword,
+		SSHKeyID:        req.SSHKeyID,
 		CreateTime:      time.Now(),
 	}
 

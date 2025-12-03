@@ -91,6 +91,17 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 			ip.POST("/change", ipCtrl.ChangePublicIp)
 			ip.POST("/attachIpv6", ipCtrl.AttachIpv6)
 		}
+
+		keyCtrl := controllers.NewKeyController()
+		key := api.Group("/key")
+		{
+			key.POST("/list", keyCtrl.ListKeys)
+			key.POST("/create", keyCtrl.CreateKey)
+			key.POST("/update", keyCtrl.UpdateKey)
+			key.POST("/delete", keyCtrl.DeleteKey)
+			key.GET("/standalone", keyCtrl.GetAllStandaloneKeys)
+			key.GET("/detail", keyCtrl.GetKeyByID)
+		}
 	}
 
 	// SPA fallback - 所有未匹配的路由都返回 index.html，让前端路由接管
