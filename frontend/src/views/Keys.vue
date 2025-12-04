@@ -1,168 +1,37 @@
-<template>
-  <div class="space-y-6">
-    <div class="flex justify-between items-center">
-      <h1 class="text-3xl font-bold">密钥管理</h1>
-      <button class="btn btn-primary" @click="showAddModal = true">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        添加公钥
-      </button>
-    </div>
-
-    <div class="card">
-      <div class="p-6 border-b border-slate-700 flex gap-4">
-        <input
-          v-model="searchText"
-          type="text"
-          placeholder="搜索密钥名..."
-          class="input max-w-md"
-          @input="handleSearch"
-        />
-        <select v-model="filterType" class="input max-w-xs" @change="loadKeys(1)">
-          <option value="">全部类型</option>
-          <option value="standalone">独立上传</option>
-          <option value="config">配置关联</option>
-        </select>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead class="bg-slate-700/50">
-            <tr>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">名称</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">类型</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">公钥</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">关联配置</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">创建时间</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">操作</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-700">
-            <tr v-if="loading">
-              <td colspan="6" class="px-6 py-8 text-center text-slate-400">
-                <svg class="animate-spin h-8 w-8 mx-auto" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </td>
-            </tr>
-            <tr v-else-if="!keys.length">
-              <td colspan="6" class="px-6 py-8 text-center text-slate-400">暂无密钥</td>
-            </tr>
-            <tr v-for="key in keys" v-else :key="key.id" class="hover:bg-slate-700/30">
-              <td class="px-6 py-4 font-medium">{{ key.name }}</td>
-              <td class="px-6 py-4">
-                <span
-                  class="px-2 py-1 text-xs font-semibold rounded-full"
-                  :class="key.keyType === 'standalone' ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'"
-                >
-                  {{ key.keyType === 'standalone' ? '独立上传' : '配置关联' }}
-                </span>
-              </td>
-              <td class="px-6 py-4">
-                <div class="flex items-center gap-2">
-                  <span class="font-mono text-xs text-slate-400 truncate max-w-xs">{{ key.publicKey.substring(0, 50) }}...</span>
-                  <button class="text-blue-400 hover:text-blue-300" title="复制公钥" @click="copyToClipboard(key.publicKey)">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                </div>
-              </td>
-              <td class="px-6 py-4 text-sm text-slate-400">{{ key.configName || '-' }}</td>
-              <td class="px-6 py-4 text-sm text-slate-400">{{ key.createTime }}</td>
-              <td class="px-6 py-4">
-                <div class="flex gap-2">
-                  <button
-                    v-if="key.keyType === 'standalone'"
-                    class="text-blue-400 hover:text-blue-300"
-                    title="编辑"
-                    @click="editKey(key)"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    v-if="key.keyType === 'standalone'"
-                    class="text-red-400 hover:text-red-300"
-                    title="删除"
-                    @click="deleteKey(key.id)"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="totalPages > 1" class="p-6 border-t border-slate-700 flex justify-center gap-2">
-        <button :disabled="currentPage === 1" class="btn btn-secondary" @click="loadKeys(currentPage - 1)">上一页</button>
-        <span class="flex items-center px-4 text-slate-300">第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button :disabled="currentPage === totalPages" class="btn btn-secondary" @click="loadKeys(currentPage + 1)">下一页</button>
-      </div>
-    </div>
-
-    <!-- 添加/编辑密钥弹窗 -->
-    <div v-if="showAddModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="p-6 border-b border-slate-700 flex justify-between items-center">
-          <h3 class="text-xl font-bold">{{ editingKey ? '编辑公钥' : '添加公钥' }}</h3>
-          <button class="text-slate-400 hover:text-white" @click="closeModal">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form class="p-6 space-y-4" @submit.prevent="submitForm">
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">密钥名称</label>
-            <input v-model="form.name" type="text" class="input" placeholder="例: 我的SSH公钥" required />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">公钥内容</label>
-            <textarea
-              v-model="form.publicKey"
-              class="input min-h-[150px] font-mono text-sm"
-              placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."
-              required
-            ></textarea>
-            <p class="text-xs text-slate-400 mt-2">粘贴您的 SSH 公钥内容（通常位于 ~/.ssh/id_rsa.pub）</p>
-          </div>
-
-          <div class="flex gap-3 pt-4">
-            <button type="button" class="btn btn-secondary flex-1" @click="closeModal">取消</button>
-            <button type="submit" class="btn btn-primary flex-1" :disabled="submitting">
-              {{ submitting ? '提交中...' : '提交' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import api from '../utils/api'
-import { toast } from '../utils/toast'
+import { Plus, Search, Trash2, Edit, Copy, ChevronLeft, ChevronRight, Loader2, Key } from 'lucide-vue-next'
+import api from '@/lib/api'
+import { toast } from '@/composables/useToast'
+import { copyToClipboard, truncateId } from '@/lib/utils'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Select } from '@/components/ui/select'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
-const keys = ref([])
+interface KeyItem {
+  id: number
+  name: string
+  keyType: string
+  publicKey: string
+  configName?: string
+  createTime: string
+}
+
+const keys = ref<KeyItem[]>([])
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = 10
 const totalPages = ref(0)
 const searchText = ref('')
 const filterType = ref('')
+
 const showAddModal = ref(false)
-const editingKey = ref(null)
+const editingKey = ref<KeyItem | null>(null)
 const submitting = ref(false)
 
 const form = ref({
@@ -182,7 +51,7 @@ const loadKeys = async (page = 1) => {
     keys.value = response.data.list || []
     currentPage.value = response.data.page
     totalPages.value = Math.ceil(response.data.total / pageSize)
-  } catch (error) {
+  } catch (error: any) {
     toast.error(error.message || '加载失败')
   } finally {
     loading.value = false
@@ -216,14 +85,14 @@ const submitForm = async () => {
     }
     closeModal()
     await loadKeys(currentPage.value)
-  } catch (error) {
+  } catch (error: any) {
     toast.error(error.message || '操作失败')
   } finally {
     submitting.value = false
   }
 }
 
-const editKey = (key) => {
+const editKey = (key: KeyItem) => {
   editingKey.value = key
   form.value = {
     name: key.name,
@@ -232,26 +101,209 @@ const editKey = (key) => {
   showAddModal.value = true
 }
 
-const deleteKey = async (id) => {
+const deleteKey = async (id: number) => {
   if (!confirm('确定要删除此密钥吗？')) return
   try {
     await api.post('/key/delete', { ids: [id] })
     toast.success('删除成功')
     await loadKeys(currentPage.value)
-  } catch (error) {
+  } catch (error: any) {
     toast.error(error.message || '删除失败')
   }
 }
 
-const copyToClipboard = (text) => {
-  navigator.clipboard.writeText(text).then(() => {
+const handleCopy = async (text: string) => {
+  try {
+    await copyToClipboard(text)
     toast.success('已复制到剪贴板')
-  }).catch(() => {
+  } catch {
     toast.error('复制失败')
-  })
+  }
 }
 
 onMounted(() => {
   loadKeys()
 })
 </script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Header -->
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: -20 }"
+      :enter="{ opacity: 1, y: 0 }"
+      class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+    >
+      <h1 class="text-3xl font-display font-bold">密钥管理</h1>
+      <Button @click="showAddModal = true">
+        <Plus class="w-4 h-4" />
+        添加公钥
+      </Button>
+    </div>
+
+    <!-- Main Card -->
+    <Card
+      v-motion
+      :initial="{ opacity: 0, y: 20 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 100 } }"
+      class="border-border/50"
+    >
+      <!-- Search -->
+      <CardHeader class="border-b border-border/50 pb-4">
+        <div class="flex gap-4">
+          <div class="relative max-w-md flex-1">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input v-model="searchText" placeholder="搜索密钥名..." class="pl-10" @input="handleSearch" />
+          </div>
+          <Select v-model="filterType" class="w-40" @change="loadKeys(1)">
+            <option value="">全部类型</option>
+            <option value="standalone">独立上传</option>
+            <option value="config">配置关联</option>
+          </Select>
+        </div>
+      </CardHeader>
+
+      <!-- Table -->
+      <CardContent class="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead>名称</TableHead>
+              <TableHead>类型</TableHead>
+              <TableHead>公钥</TableHead>
+              <TableHead>关联配置</TableHead>
+              <TableHead>创建时间</TableHead>
+              <TableHead class="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-if="loading">
+              <TableCell colspan="6" class="h-32 text-center">
+                <Loader2 class="w-8 h-8 mx-auto animate-spin text-primary" />
+              </TableCell>
+            </TableRow>
+
+            <TableRow v-else-if="!keys.length">
+              <TableCell colspan="6" class="h-32 text-center text-muted-foreground">暂无密钥</TableCell>
+            </TableRow>
+
+            <TableRow
+              v-for="(key, index) in keys"
+              v-else
+              :key="key.id"
+              v-motion
+              :initial="{ opacity: 0, x: -20 }"
+              :enter="{ opacity: 1, x: 0, transition: { delay: 50 * index } }"
+              class="group"
+            >
+              <TableCell class="font-medium">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+                    <Key class="w-4 h-4 text-primary" />
+                  </div>
+                  {{ key.name }}
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge :variant="key.keyType === 'standalone' ? 'info' : 'secondary'">
+                  {{ key.keyType === 'standalone' ? '独立上传' : '配置关联' }}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-muted-foreground">
+                    {{ truncateId(key.publicKey, 40) }}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-6 w-6"
+                    title="复制公钥"
+                    @click="handleCopy(key.publicKey)"
+                  >
+                    <Copy class="w-3 h-3" />
+                  </Button>
+                </div>
+              </TableCell>
+              <TableCell class="text-muted-foreground">{{ key.configName || '-' }}</TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ key.createTime }}</TableCell>
+              <TableCell class="text-right">
+                <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    v-if="key.keyType === 'standalone'"
+                    variant="ghost"
+                    size="icon"
+                    title="编辑"
+                    @click="editKey(key)"
+                  >
+                    <Edit class="w-4 h-4" />
+                  </Button>
+                  <Button
+                    v-if="key.keyType === 'standalone'"
+                    variant="ghost"
+                    size="icon"
+                    title="删除"
+                    class="text-destructive hover:text-destructive"
+                    @click="deleteKey(key.id)"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        <!-- Pagination -->
+        <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 p-4 border-t border-border/50">
+          <Button variant="outline" size="sm" :disabled="currentPage === 1" @click="loadKeys(currentPage - 1)">
+            <ChevronLeft class="w-4 h-4" />
+            上一页
+          </Button>
+          <span class="px-4 text-sm text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 页</span>
+          <Button variant="outline" size="sm" :disabled="currentPage === totalPages" @click="loadKeys(currentPage + 1)">
+            下一页
+            <ChevronRight class="w-4 h-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Add/Edit Modal -->
+    <Dialog v-model:open="showAddModal">
+      <DialogHeader class="mb-4">
+        <DialogTitle>{{ editingKey ? '编辑公钥' : '添加公钥' }}</DialogTitle>
+        <DialogDescription>
+          {{ editingKey ? '修改现有SSH公钥信息' : '添加新的SSH公钥用于实例创建' }}
+        </DialogDescription>
+      </DialogHeader>
+
+      <form class="space-y-4" @submit.prevent="submitForm">
+        <div>
+          <label class="block text-sm font-medium mb-2">密钥名称</label>
+          <Input v-model="form.name" placeholder="例: 我的SSH公钥" required />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">公钥内容</label>
+          <Textarea
+            v-model="form.publicKey"
+            :rows="6"
+            class="font-mono text-sm"
+            placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."
+            required
+          />
+          <p class="text-xs text-muted-foreground mt-2">粘贴您的 SSH 公钥内容（通常位于 ~/.ssh/id_rsa.pub）</p>
+        </div>
+
+        <DialogFooter class="mt-6">
+          <Button type="button" variant="outline" @click="closeModal">取消</Button>
+          <Button type="submit" :loading="submitting">
+            {{ submitting ? '提交中...' : '提交' }}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
+  </div>
+</template>

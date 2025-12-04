@@ -1,76 +1,22 @@
-<template>
-  <div class="space-y-6">
-    <div class="flex justify-between items-center">
-      <h1 class="text-3xl font-bold">实时日志</h1>
-      <div class="flex gap-3">
-        <button class="btn btn-secondary" @click="clearLogs">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
-          清空日志
-        </button>
-        <button :class="isConnected ? 'btn-danger' : 'btn-primary'" class="btn" @click="toggleConnection">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              v-if="isConnected"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"
-            />
-            <path
-              v-else
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
-            />
-          </svg>
-          {{ isConnected ? '断开连接' : '连接' }}
-        </button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="p-6">
-        <div ref="logConsole" class="bg-black rounded-lg p-4 h-[600px] overflow-y-auto font-mono text-sm">
-          <div
-            v-for="(log, index) in logs"
-            :key="index"
-            class="mb-1"
-            :class="{
-              'text-green-400': log.type === 'info',
-              'text-red-400': log.type === 'error',
-              'text-yellow-400': log.type === 'warning',
-              'text-blue-400': log.type === 'success'
-            }"
-          >
-            {{ log.message }}
-          </div>
-          <div v-if="!logs.length" class="text-slate-500 text-center py-8">
-            {{ isConnected ? '等待日志输出...' : '未连接，请点击"连接"按钮' }}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
+<script setup lang="ts">
 import { ref, onUnmounted, nextTick } from 'vue'
-import { toast } from '../utils/toast'
+import { Wifi, WifiOff, Trash2, Terminal } from 'lucide-vue-next'
+import { toast } from '@/composables/useToast'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
-const logs = ref([])
+interface LogEntry {
+  message: string
+  type: 'info' | 'error' | 'warning' | 'success'
+}
+
+const logs = ref<LogEntry[]>([])
 const isConnected = ref(false)
-const ws = ref(null)
-const logConsole = ref(null)
+const ws = ref<WebSocket | null>(null)
+const logConsole = ref<HTMLElement>()
 
-const addLog = (message, type = 'info') => {
+const addLog = (message: string, type: LogEntry['type'] = 'info') => {
   const timestamp = new Date().toLocaleTimeString('zh-CN')
   logs.value.push({
     message: `[${timestamp}] ${message}`,
@@ -97,12 +43,11 @@ const connectWebSocket = () => {
       toast.success('日志连接成功')
     }
 
-    ws.value.onmessage = (event) => {
+    ws.value.onmessage = event => {
       addLog(event.data, 'info')
     }
 
-    ws.value.onerror = (error) => {
-      console.error('WebSocket错误:', error)
+    ws.value.onerror = () => {
       addLog('WebSocket 连接错误', 'error')
       toast.error('WebSocket连接错误')
     }
@@ -111,8 +56,7 @@ const connectWebSocket = () => {
       isConnected.value = false
       addLog('WebSocket 连接已断开', 'warning')
     }
-  } catch (error) {
-    console.error('创建WebSocket失败:', error)
+  } catch {
     toast.error('无法建立WebSocket连接')
   }
 }
@@ -138,7 +82,94 @@ const clearLogs = () => {
   toast.info('日志已清空')
 }
 
+const getLogColor = (type: LogEntry['type']) => {
+  switch (type) {
+    case 'success':
+      return 'text-success'
+    case 'error':
+      return 'text-destructive'
+    case 'warning':
+      return 'text-warning'
+    default:
+      return 'text-primary'
+  }
+}
+
 onUnmounted(() => {
   disconnectWebSocket()
 })
 </script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Header -->
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: -20 }"
+      :enter="{ opacity: 1, y: 0 }"
+      class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+    >
+      <div class="flex items-center gap-3">
+        <h1 class="text-3xl font-display font-bold">实时日志</h1>
+        <Badge :variant="isConnected ? 'success' : 'secondary'" class="gap-1">
+          <span class="relative flex h-2 w-2">
+            <span
+              v-if="isConnected"
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"
+            />
+            <span
+              class="relative inline-flex rounded-full h-2 w-2"
+              :class="isConnected ? 'bg-success' : 'bg-muted-foreground'"
+            />
+          </span>
+          {{ isConnected ? '已连接' : '未连接' }}
+        </Badge>
+      </div>
+      <div class="flex gap-2">
+        <Button variant="outline" @click="clearLogs">
+          <Trash2 class="w-4 h-4" />
+          清空日志
+        </Button>
+        <Button :variant="isConnected ? 'destructive' : 'default'" @click="toggleConnection">
+          <WifiOff v-if="isConnected" class="w-4 h-4" />
+          <Wifi v-else class="w-4 h-4" />
+          {{ isConnected ? '断开连接' : '连接' }}
+        </Button>
+      </div>
+    </div>
+
+    <!-- Console Card -->
+    <Card
+      v-motion
+      :initial="{ opacity: 0, y: 20 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 100 } }"
+      class="border-border/50"
+    >
+      <CardHeader class="border-b border-border/50 py-3">
+        <CardTitle class="flex items-center gap-2 text-base">
+          <Terminal class="w-4 h-4 text-primary" />
+          控制台输出
+        </CardTitle>
+      </CardHeader>
+      <CardContent class="p-0">
+        <div ref="logConsole" class="bg-background rounded-b-lg p-4 h-[600px] overflow-y-auto font-mono text-sm">
+          <div
+            v-for="(log, index) in logs"
+            :key="index"
+            v-motion
+            :initial="{ opacity: 0, x: -10 }"
+            :enter="{ opacity: 1, x: 0 }"
+            class="mb-1 leading-relaxed"
+            :class="getLogColor(log.type)"
+          >
+            {{ log.message }}
+          </div>
+          <div v-if="!logs.length" class="text-muted-foreground text-center py-8">
+            <Terminal class="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>{{ isConnected ? '等待日志输出...' : '未连接，请点击"连接"按钮' }}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+</template>
