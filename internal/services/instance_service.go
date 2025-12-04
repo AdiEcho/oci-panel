@@ -205,3 +205,55 @@ func (s *InstanceService) CreateCloudShellConnection(userId string, instanceId s
 
 	return result, nil
 }
+
+// AttachIPv6 为实例附加IPv6地址
+func (s *InstanceService) AttachIPv6(userId string, instanceId string) (string, error) {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return "", fmt.Errorf("user not found: %w", err)
+	}
+
+	ctx := context.Background()
+	ipv6Address, err := s.ociService.CreateIpv6ByInstanceId(ctx, &user, instanceId)
+	if err != nil {
+		return "", fmt.Errorf("failed to attach IPv6: %w", err)
+	}
+
+	return ipv6Address, nil
+}
+
+// AutoRescue 自动救援/缩小硬盘
+func (s *InstanceService) AutoRescue(userId string, instanceId string, instanceName string, keepBackup bool, progressChan chan<- AutoRescueProgress) error {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	params := AutoRescueParams{
+		InstanceID:       instanceId,
+		InstanceName:     instanceName,
+		KeepBackupVolume: keepBackup,
+	}
+
+	return s.ociService.AutoRescue(&user, params, progressChan)
+}
+
+// Enable500Mbps 一键开启下行500Mbps
+func (s *InstanceService) Enable500Mbps(userId string, instanceId string, sshPort int) (string, error) {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return "", fmt.Errorf("user not found: %w", err)
+	}
+
+	return s.ociService.Enable500Mbps(&user, instanceId, sshPort)
+}
+
+// Disable500Mbps 关闭下行500Mbps
+func (s *InstanceService) Disable500Mbps(userId string, instanceId string, retainNatGw, retainNlb bool) error {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	return s.ociService.Disable500Mbps(&user, instanceId, retainNatGw, retainNlb)
+}

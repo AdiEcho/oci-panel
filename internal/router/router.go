@@ -83,6 +83,10 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 			instance.POST("/updateConfig", instanceCtrl.UpdateInstanceConfig)
 			instance.POST("/updateBootVolume", instanceCtrl.UpdateBootVolume)
 			instance.POST("/createCloudShell", instanceCtrl.CreateCloudShell)
+			instance.POST("/attachIPv6", instanceCtrl.AttachIPv6)
+			instance.POST("/autoRescue", instanceCtrl.AutoRescue)
+			instance.POST("/enable500Mbps", instanceCtrl.Enable500Mbps)
+			instance.POST("/disable500Mbps", instanceCtrl.Disable500Mbps)
 		}
 
 		ipCtrl := controllers.NewIpController(ipService)

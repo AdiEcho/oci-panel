@@ -1156,7 +1156,7 @@
       v-if="editConfigDialogVisible"
       class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
-      <div class="card max-w-md w-full">
+      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-700 flex justify-between items-center">
           <h3 class="text-xl font-bold">编辑实例配置</h3>
           <button class="text-slate-400 hover:text-white" @click="editConfigDialogVisible = false">
@@ -1166,46 +1166,166 @@
           </button>
         </div>
 
-        <form class="p-6 space-y-4" @submit.prevent="updateInstanceConfig">
-          <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
-            <p class="text-sm text-yellow-300">
-              <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              注意：修改配置需要停止实例
-            </p>
+        <div class="p-6 space-y-6">
+          <!-- 实例名称 -->
+          <div class="card p-4 bg-slate-700/30">
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">修改实例名称</h4>
+            <div class="flex gap-3">
+              <input v-model="editConfigForm.displayName" type="text" class="input flex-1" placeholder="请输入实例名称" />
+              <button class="btn btn-primary" :disabled="configUpdating" @click="updateInstanceName">
+                {{ configUpdating ? '修改中...' : '修改名称' }}
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">CPU核心数 (OCPUs)</label>
-            <input v-model.number="editConfigForm.ocpus" type="number" min="1" max="64" class="input" required />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">内存 (GB)</label>
-            <input
-              v-model.number="editConfigForm.memoryInGBs"
-              type="number"
-              min="1"
-              max="1024"
-              class="input"
-              required
-            />
-          </div>
-
-          <div class="flex gap-3 pt-4">
-            <button type="button" class="btn btn-secondary flex-1" @click="editConfigDialogVisible = false">
-              取消
-            </button>
-            <button type="submit" class="btn btn-primary flex-1" :disabled="configUpdating">
-              {{ configUpdating ? '更新中...' : '保存' }}
+          <!-- CPU和内存 -->
+          <div class="card p-4 bg-slate-700/30">
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">修改CPU和内存</h4>
+            <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-3">
+              <p class="text-xs text-yellow-300">
+                <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                修改CPU和内存需要停止实例
+              </p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">CPU核心数 (OCPUs)</label>
+                <input v-model.number="editConfigForm.ocpus" type="number" min="1" max="64" class="input" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">内存 (GB)</label>
+                <input v-model.number="editConfigForm.memoryInGBs" type="number" min="1" max="1024" class="input" />
+              </div>
+            </div>
+            <button class="btn btn-primary mt-3 w-full" :disabled="configUpdating" @click="updateInstanceConfig">
+              {{ configUpdating ? '修改中...' : '修改CPU和内存' }}
             </button>
           </div>
-        </form>
+
+          <!-- 引导卷配置 -->
+          <div class="card p-4 bg-slate-700/30">
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">修改引导卷大小及VPU</h4>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">引导卷大小 (GB)</label>
+                <input v-model.number="editConfigForm.bootVolumeSize" type="number" min="50" max="32768" class="input" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">VPU/GB (性能)</label>
+                <select v-model.number="editConfigForm.vpusPerGB" class="input">
+                  <option :value="10">10 VPU - 平衡</option>
+                  <option :value="20">20 VPU - 高性能</option>
+                  <option :value="30">30 VPU - 更高性能</option>
+                  <option :value="40">40 VPU - 极高性能</option>
+                  <option :value="50">50 VPU - 超高性能</option>
+                  <option :value="100">100+ VPU - 最高性能</option>
+                  <option :value="120">120 VPU - 极致性能</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary mt-3 w-full" :disabled="configUpdating" @click="updateBootVolume">
+              {{ configUpdating ? '修改中...' : '修改引导卷配置' }}
+            </button>
+          </div>
+
+          <!-- IPv6 -->
+          <div class="card p-4 bg-slate-700/30">
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">附加IPv6地址</h4>
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-400">
+                <span v-if="editConfigForm.currentIpv6">当前IPv6: <span class="text-blue-300 font-mono">{{ editConfigForm.currentIpv6 }}</span></span>
+                <span v-else>该实例未分配IPv6地址</span>
+              </div>
+              <button 
+                class="btn btn-primary" 
+                :disabled="configUpdating || editConfigForm.currentIpv6" 
+                @click="attachIPv6"
+              >
+                {{ configUpdating ? '附加中...' : (editConfigForm.currentIpv6 ? '已有IPv6' : '附加IPv6') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 自动救援/缩小硬盘 -->
+          <div class="card p-4 bg-slate-700/30">
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">自动救援/缩小硬盘</h4>
+            <div class="space-y-3">
+              <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                <p class="text-xs text-yellow-300">
+                  <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                  此操作会关闭实例，备份引导卷，创建47GB新引导卷并重新启动。过程需要5-10分钟。
+                </p>
+              </div>
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input v-model="editConfigForm.keepBackup" type="checkbox" class="checkbox" />
+                  <span>保留原引导卷备份</span>
+                </label>
+                <button 
+                  class="btn btn-warning" 
+                  :disabled="configUpdating" 
+                  @click="startAutoRescue"
+                >
+                  {{ configUpdating ? '执行中...' : '开始救援' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 500Mbps下行带宽 -->
+          <div class="card p-4 bg-slate-700/30">
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">500Mbps下行带宽 (仅AMD实例)</h4>
+            <div class="space-y-3">
+              <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <p class="text-xs text-blue-300">
+                  <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                  </svg>
+                  通过NAT网关和网络负载均衡器实现500Mbps下行带宽。仅支持AMD E2.1.Micro实例。
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-sm text-slate-300">SSH端口:</label>
+                <input v-model.number="editConfigForm.sshPort" type="number" min="1" max="65535" class="input w-24" placeholder="22" />
+              </div>
+              <div class="flex gap-2">
+                <button 
+                  class="btn btn-success flex-1" 
+                  :disabled="configUpdating" 
+                  @click="enable500Mbps"
+                >
+                  {{ configUpdating ? '执行中...' : '开启500Mbps' }}
+                </button>
+                <button 
+                  class="btn btn-danger flex-1" 
+                  :disabled="configUpdating" 
+                  @click="disable500Mbps"
+                >
+                  {{ configUpdating ? '执行中...' : '关闭500Mbps' }}
+                </button>
+              </div>
+              <div class="flex items-center gap-4 text-xs text-slate-400">
+                <label class="flex items-center gap-1 cursor-pointer">
+                  <input v-model="editConfigForm.retainNatGw" type="checkbox" class="checkbox checkbox-sm" />
+                  <span>保留NAT网关</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer">
+                  <input v-model="editConfigForm.retainNlb" type="checkbox" class="checkbox checkbox-sm" />
+                  <span>保留负载均衡器</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- 关闭按钮 -->
+          <div class="flex justify-end pt-2">
+            <button class="btn btn-secondary" @click="editConfigDialogVisible = false">关闭</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1411,7 +1531,19 @@ const sshKeys = ref([])
 
 const userForm = ref({ email: '', dbUserName: '', description: '' })
 
-const editConfigForm = reactive({ instanceId: '', displayName: '', ocpus: 2, memoryInGBs: 12 })
+const editConfigForm = reactive({ 
+  instanceId: '', 
+  displayName: '', 
+  ocpus: 2, 
+  memoryInGBs: 12,
+  bootVolumeSize: 50,
+  vpusPerGB: 10,
+  currentIpv6: '',
+  keepBackup: false,
+  sshPort: 22,
+  retainNatGw: false,
+  retainNlb: false
+})
 
 const cloudShellForm = reactive({ instanceId: '', publicKey: '' })
 const cloudShellResult = reactive({ connectionId: '', connectionString: '' })
@@ -1944,6 +2076,9 @@ const showEditConfigDialog = (instance) => {
   editConfigForm.displayName = instance.displayName
   editConfigForm.ocpus = instance.ocpus || 2
   editConfigForm.memoryInGBs = instance.memory || 12
+  editConfigForm.bootVolumeSize = instance.bootVolumeSize || 50
+  editConfigForm.vpusPerGB = instance.bootVolumeVpu || 10
+  editConfigForm.currentIpv6 = instance.ipv6 || ''
   editConfigDialogVisible.value = true
 }
 
@@ -1962,13 +2097,176 @@ const updateInstanceConfig = async () => {
     })
     if (response.data && response.data.code === 200) {
       toast.success('实例配置更新成功')
-      editConfigDialogVisible.value = false
       setTimeout(() => loadInstances(true), 2000)
     } else {
       toast.error(response.data?.msg || '实例配置更新失败')
     }
   } catch (error) {
     toast.error(error.message || '实例配置更新失败')
+  } finally {
+    configUpdating.value = false
+  }
+}
+
+const updateInstanceName = async () => {
+  if (!editConfigForm.instanceId || !editConfigForm.displayName) {
+    toast.warning('请输入实例名称')
+    return
+  }
+  configUpdating.value = true
+  try {
+    const response = await api.post('/instance/updateName', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId,
+      displayName: editConfigForm.displayName
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success('实例名称更新成功')
+      setTimeout(() => loadInstances(true), 2000)
+    } else {
+      toast.error(response.data?.msg || '实例名称更新失败')
+    }
+  } catch (error) {
+    toast.error(error.message || '实例名称更新失败')
+  } finally {
+    configUpdating.value = false
+  }
+}
+
+const updateBootVolume = async () => {
+  if (!editConfigForm.instanceId) {
+    toast.warning('缺少实例ID')
+    return
+  }
+  configUpdating.value = true
+  try {
+    const response = await api.post('/instance/updateBootVolume', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId,
+      sizeInGBs: editConfigForm.bootVolumeSize,
+      vpusPerGB: editConfigForm.vpusPerGB
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success('引导卷配置更新成功')
+      setTimeout(() => loadInstances(true), 2000)
+    } else {
+      toast.error(response.data?.msg || '引导卷配置更新失败')
+    }
+  } catch (error) {
+    toast.error(error.message || '引导卷配置更新失败')
+  } finally {
+    configUpdating.value = false
+  }
+}
+
+const attachIPv6 = async () => {
+  if (!editConfigForm.instanceId) {
+    toast.warning('缺少实例ID')
+    return
+  }
+  if (editConfigForm.currentIpv6) {
+    toast.warning('该实例已有IPv6地址')
+    return
+  }
+  if (!confirm('确定要为该实例附加IPv6地址吗？')) return
+  configUpdating.value = true
+  try {
+    const response = await api.post('/instance/attachIPv6', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success(`IPv6附加成功: ${response.data.data.ipv6}`)
+      editConfigForm.currentIpv6 = response.data.data.ipv6
+      setTimeout(() => loadInstances(true), 2000)
+    } else {
+      toast.error(response.data?.msg || 'IPv6附加失败')
+    }
+  } catch (error) {
+    toast.error(error.message || 'IPv6附加失败')
+  } finally {
+    configUpdating.value = false
+  }
+}
+
+// 自动救援
+const startAutoRescue = async () => {
+  if (!editConfigForm.instanceId) {
+    toast.warning('缺少实例ID')
+    return
+  }
+  if (!confirm('自动救援将会关闭实例，备份引导卷，创建47GB新引导卷并重新启动。此操作需要5-10分钟，确定继续吗？')) return
+  configUpdating.value = true
+  try {
+    const response = await api.post('/instance/autoRescue', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId,
+      instanceName: editConfigForm.displayName,
+      keepBackup: editConfigForm.keepBackup
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success('自动救援任务已启动，请等待5-10分钟完成')
+      editConfigDialogVisible.value = false
+    } else {
+      toast.error(response.data?.msg || '自动救援启动失败')
+    }
+  } catch (error) {
+    toast.error(error.message || '自动救援启动失败')
+  } finally {
+    configUpdating.value = false
+  }
+}
+
+// 开启500Mbps
+const enable500Mbps = async () => {
+  if (!editConfigForm.instanceId) {
+    toast.warning('缺少实例ID')
+    return
+  }
+  if (!confirm('此操作将创建NAT网关和网络负载均衡器来实现500Mbps下行带宽。仅AMD E2.1.Micro实例支持此功能，确定继续吗？')) return
+  configUpdating.value = true
+  try {
+    const response = await api.post('/instance/enable500Mbps', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId,
+      sshPort: editConfigForm.sshPort || 22
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success('500Mbps开启任务已启动，请稍后检查实例状态')
+      editConfigDialogVisible.value = false
+    } else {
+      toast.error(response.data?.msg || '500Mbps开启失败')
+    }
+  } catch (error) {
+    toast.error(error.message || '500Mbps开启失败')
+  } finally {
+    configUpdating.value = false
+  }
+}
+
+// 关闭500Mbps
+const disable500Mbps = async () => {
+  if (!editConfigForm.instanceId) {
+    toast.warning('缺少实例ID')
+    return
+  }
+  if (!confirm('确定要关闭500Mbps下行带宽吗？这将删除相关的网络资源。')) return
+  configUpdating.value = true
+  try {
+    const response = await api.post('/instance/disable500Mbps', {
+      userId: configDetails.value.userId,
+      instanceId: editConfigForm.instanceId,
+      retainNatGw: editConfigForm.retainNatGw,
+      retainNlb: editConfigForm.retainNlb
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success('500Mbps关闭任务已启动，请稍后检查实例状态')
+      editConfigDialogVisible.value = false
+    } else {
+      toast.error(response.data?.msg || '500Mbps关闭失败')
+    }
+  } catch (error) {
+    toast.error(error.message || '500Mbps关闭失败')
   } finally {
     configUpdating.value = false
   }

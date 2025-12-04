@@ -14,6 +14,7 @@ import (
 	"github.com/oracle/oci-go-sdk/v65/identity"
 	"github.com/oracle/oci-go-sdk/v65/identitydomains"
 	"github.com/oracle/oci-go-sdk/v65/monitoring"
+	"github.com/oracle/oci-go-sdk/v65/networkloadbalancer"
 )
 
 type OCIService struct {
@@ -1162,4 +1163,1033 @@ func (s *OCIService) DeleteUserApiKeys(ctx context.Context, user *models.OciUser
 	}
 
 	return nil
+}
+
+// CreateIpv6ByInstanceId 通过实例ID创建并附加IPv6地址
+func (s *OCIService) CreateIpv6ByInstanceId(ctx context.Context, user *models.OciUser, instanceId string) (string, error) {
+	computeClient, err := s.GetComputeClient(user)
+	if err != nil {
+		return "", err
+	}
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return "", err
+	}
+
+	// 获取实例信息
+	instance, err := s.GetInstance(ctx, user, instanceId)
+	if err != nil {
+		return "", fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	// 获取VNIC附件
+	listVnicReq := core.ListVnicAttachmentsRequest{
+		CompartmentId: instance.CompartmentId,
+		InstanceId:    instance.Id,
+	}
+	vnicResp, err := computeClient.ListVnicAttachments(ctx, listVnicReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to list VNIC attachments: %w", err)
+	}
+
+	if len(vnicResp.Items) == 0 {
+		return "", fmt.Errorf("no VNIC found for instance")
+	}
+
+	// 获取第一个VNIC
+	vnicId := vnicResp.Items[0].VnicId
+	if vnicId == nil {
+		return "", fmt.Errorf("VNIC ID is nil")
+	}
+
+	// 获取VNIC详情
+	vnicReq := core.GetVnicRequest{VnicId: vnicId}
+	vnic, err := vnClient.GetVnic(ctx, vnicReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VNIC: %w", err)
+	}
+
+	// 检查是否已有IPv6
+	ipv6ListReq := core.ListIpv6sRequest{VnicId: vnicId}
+	ipv6ListResp, err := vnClient.ListIpv6s(ctx, ipv6ListReq)
+	if err == nil && len(ipv6ListResp.Items) > 0 {
+		if ipv6ListResp.Items[0].IpAddress != nil {
+			return "", fmt.Errorf("instance already has IPv6 address: %s", *ipv6ListResp.Items[0].IpAddress)
+		}
+	}
+
+	// 获取子网信息
+	subnetReq := core.GetSubnetRequest{SubnetId: vnic.SubnetId}
+	subnetResp, err := vnClient.GetSubnet(ctx, subnetReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to get subnet: %w", err)
+	}
+
+	// 获取VCN信息
+	vcnReq := core.GetVcnRequest{VcnId: subnetResp.VcnId}
+	vcnResp, err := vnClient.GetVcn(ctx, vcnReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VCN: %w", err)
+	}
+
+	// 检查VCN是否启用了IPv6
+	if len(vcnResp.Ipv6CidrBlocks) == 0 {
+		return "", fmt.Errorf("VCN does not have IPv6 enabled. Please enable IPv6 on VCN first via Oracle Cloud Console")
+	}
+
+	ipv6SubnetCidr := vcnResp.Ipv6CidrBlocks[0]
+
+	// 创建IPv6
+	createIpv6Req := core.CreateIpv6Request{
+		CreateIpv6Details: core.CreateIpv6Details{
+			VnicId:         vnicId,
+			Ipv6SubnetCidr: &ipv6SubnetCidr,
+		},
+	}
+	createIpv6Resp, err := vnClient.CreateIpv6(ctx, createIpv6Req)
+	if err != nil {
+		return "", fmt.Errorf("failed to create IPv6: %w", err)
+	}
+
+	if createIpv6Resp.IpAddress == nil {
+		return "", fmt.Errorf("IPv6 address is nil")
+	}
+
+	return *createIpv6Resp.IpAddress, nil
+}
+
+// GetInstanceById 根据实例ID获取实例
+func (s *OCIService) GetInstanceById(user *models.OciUser, instanceID string) (*core.Instance, error) {
+	ctx := context.Background()
+	client, err := s.GetComputeClient(user)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.GetInstance(ctx, core.GetInstanceRequest{InstanceId: &instanceID})
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Instance, nil
+}
+
+// GetBootVolumeByInstanceId 根据实例ID获取引导卷
+func (s *OCIService) GetBootVolumeByInstanceId(user *models.OciUser, instanceID string) (*core.BootVolume, error) {
+	ctx := context.Background()
+
+	computeClient, err := s.GetComputeClient(user)
+	if err != nil {
+		return nil, err
+	}
+
+	blockClient, err := s.GetBlockstorageClient(user)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取实例
+	instance, err := computeClient.GetInstance(ctx, core.GetInstanceRequest{InstanceId: &instanceID})
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取引导卷附件
+	bvaResp, err := computeClient.ListBootVolumeAttachments(ctx, core.ListBootVolumeAttachmentsRequest{
+		CompartmentId:      instance.CompartmentId,
+		AvailabilityDomain: instance.AvailabilityDomain,
+		InstanceId:         &instanceID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(bvaResp.Items) == 0 {
+		return nil, fmt.Errorf("no boot volume attachment found")
+	}
+
+	// 获取引导卷
+	bvResp, err := blockClient.GetBootVolume(ctx, core.GetBootVolumeRequest{
+		BootVolumeId: bvaResp.Items[0].BootVolumeId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &bvResp.BootVolume, nil
+}
+
+// GetNetworkLoadBalancerClient 获取网络负载均衡器客户端
+func (s *OCIService) GetNetworkLoadBalancerClient(user *models.OciUser) (networkloadbalancer.NetworkLoadBalancerClient, error) {
+	configProvider, err := s.GetConfigProvider(user)
+	if err != nil {
+		return networkloadbalancer.NetworkLoadBalancerClient{}, err
+	}
+
+	client, err := networkloadbalancer.NewNetworkLoadBalancerClientWithConfigurationProvider(configProvider)
+	if err != nil {
+		return networkloadbalancer.NetworkLoadBalancerClient{}, err
+	}
+
+	return client, nil
+}
+
+// AutoRescueParams 自动救援参数
+type AutoRescueParams struct {
+	InstanceID       string
+	InstanceName     string
+	KeepBackupVolume bool
+}
+
+// AutoRescueProgress 自动救援进度
+type AutoRescueProgress struct {
+	Step        int    `json:"step"`
+	TotalSteps  int    `json:"totalSteps"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+	PublicIP    string `json:"publicIp,omitempty"`
+	SSHPassword string `json:"sshPassword,omitempty"`
+}
+
+// AutoRescue 自动救援/缩小硬盘 (9步骤)
+func (s *OCIService) AutoRescue(user *models.OciUser, params AutoRescueParams, progressChan chan<- AutoRescueProgress) error {
+	ctx := context.Background()
+
+	computeClient, err := s.GetComputeClient(user)
+	if err != nil {
+		return fmt.Errorf("failed to get compute client: %w", err)
+	}
+
+	blockClient, err := s.GetBlockstorageClient(user)
+	if err != nil {
+		return fmt.Errorf("failed to get blockstorage client: %w", err)
+	}
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return fmt.Errorf("failed to get virtual network client: %w", err)
+	}
+
+	sendProgress := func(step int, status, message string) {
+		if progressChan != nil {
+			progressChan <- AutoRescueProgress{
+				Step:       step,
+				TotalSteps: 9,
+				Status:     status,
+				Message:    message,
+			}
+		}
+	}
+
+	// 获取实例信息
+	instance, err := s.GetInstanceById(user, params.InstanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	// 获取引导卷
+	bootVolume, err := s.GetBootVolumeByInstanceId(user, params.InstanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get boot volume: %w", err)
+	}
+
+	// Step 1: 关机
+	sendProgress(1, "running", "正在关机...")
+	_, err = computeClient.InstanceAction(ctx, core.InstanceActionRequest{
+		InstanceId: instance.Id,
+		Action:     core.InstanceActionActionStop,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to stop instance: %w", err)
+	}
+
+	// 等待实例停止
+	for {
+		instResp, err := computeClient.GetInstance(ctx, core.GetInstanceRequest{InstanceId: instance.Id})
+		if err != nil {
+			return fmt.Errorf("failed to get instance status: %w", err)
+		}
+		if instResp.LifecycleState == core.InstanceLifecycleStateStopped {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	sendProgress(1, "completed", "关机成功")
+
+	// 等待引导卷可用
+	for {
+		bvResp, err := blockClient.GetBootVolume(ctx, core.GetBootVolumeRequest{BootVolumeId: bootVolume.Id})
+		if err != nil {
+			return fmt.Errorf("failed to get boot volume status: %w", err)
+		}
+		if bvResp.LifecycleState == core.BootVolumeLifecycleStateAvailable {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	// Step 2: 备份原引导卷
+	sendProgress(2, "running", "正在备份原引导卷...")
+	backupName := "Old-BootVolume-Backup"
+	backupResp, err := blockClient.CreateBootVolumeBackup(ctx, core.CreateBootVolumeBackupRequest{
+		CreateBootVolumeBackupDetails: core.CreateBootVolumeBackupDetails{
+			BootVolumeId: bootVolume.Id,
+			DisplayName:  &backupName,
+			Type:         core.CreateBootVolumeBackupDetailsTypeFull,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create boot volume backup: %w", err)
+	}
+	backupId := backupResp.Id
+	sendProgress(2, "completed", "备份原引导卷成功")
+
+	time.Sleep(3 * time.Second)
+
+	// Step 3: 分离原引导卷
+	sendProgress(3, "running", "正在分离原引导卷...")
+	// 获取引导卷附件
+	bvaListResp, err := computeClient.ListBootVolumeAttachments(ctx, core.ListBootVolumeAttachmentsRequest{
+		CompartmentId:      instance.CompartmentId,
+		AvailabilityDomain: instance.AvailabilityDomain,
+		InstanceId:         instance.Id,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list boot volume attachments: %w", err)
+	}
+	if len(bvaListResp.Items) == 0 {
+		return fmt.Errorf("no boot volume attachment found")
+	}
+	bvaId := bvaListResp.Items[0].Id
+
+	_, err = computeClient.DetachBootVolume(ctx, core.DetachBootVolumeRequest{
+		BootVolumeAttachmentId: bvaId,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to detach boot volume: %w", err)
+	}
+	sendProgress(3, "completed", "分离原引导卷成功")
+
+	// 等待备份完成
+	for {
+		backupStatusResp, err := blockClient.GetBootVolumeBackup(ctx, core.GetBootVolumeBackupRequest{BootVolumeBackupId: backupId})
+		if err != nil {
+			return fmt.Errorf("failed to get backup status: %w", err)
+		}
+		if backupStatusResp.LifecycleState == core.BootVolumeBackupLifecycleStateAvailable {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	// Step 4: 删除原引导卷
+	sendProgress(4, "running", "正在删除原引导卷...")
+	_, err = blockClient.DeleteBootVolume(ctx, core.DeleteBootVolumeRequest{
+		BootVolumeId: bootVolume.Id,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete boot volume: %w", err)
+	}
+
+	// 等待引导卷删除完成
+	for {
+		bvResp, err := blockClient.GetBootVolume(ctx, core.GetBootVolumeRequest{BootVolumeId: bootVolume.Id})
+		if err != nil {
+			break // 404 means deleted
+		}
+		if bvResp.LifecycleState == core.BootVolumeLifecycleStateTerminated {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	sendProgress(4, "completed", "删除原引导卷成功")
+
+	// Step 5: 从备份创建新的47GB引导卷
+	sendProgress(5, "running", "正在创建47GB引导卷...")
+	newBvName := "Restored-Boot-Volume-47GB"
+	sizeInGBs := int64(47)
+	newBvResp, err := blockClient.CreateBootVolume(ctx, core.CreateBootVolumeRequest{
+		CreateBootVolumeDetails: core.CreateBootVolumeDetails{
+			CompartmentId:      instance.CompartmentId,
+			AvailabilityDomain: instance.AvailabilityDomain,
+			DisplayName:        &newBvName,
+			SizeInGBs:          &sizeInGBs,
+			SourceDetails: core.BootVolumeSourceFromBootVolumeBackupDetails{
+				Id: backupId,
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create new boot volume: %w", err)
+	}
+	newBvId := newBvResp.Id
+
+	// 等待新引导卷可用
+	for {
+		bvResp, err := blockClient.GetBootVolume(ctx, core.GetBootVolumeRequest{BootVolumeId: newBvId})
+		if err != nil {
+			return fmt.Errorf("failed to get new boot volume status: %w", err)
+		}
+		if bvResp.LifecycleState == core.BootVolumeLifecycleStateAvailable {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	sendProgress(5, "completed", "创建47GB引导卷成功")
+
+	// Step 6: 附加新引导卷到实例
+	sendProgress(6, "running", "正在附加新引导卷到实例...")
+	attachName := "New-Boot-Volume"
+	_, err = computeClient.AttachBootVolume(ctx, core.AttachBootVolumeRequest{
+		AttachBootVolumeDetails: core.AttachBootVolumeDetails{
+			BootVolumeId: newBvId,
+			InstanceId:   instance.Id,
+			DisplayName:  &attachName,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to attach boot volume: %w", err)
+	}
+	sendProgress(6, "completed", "附加新引导卷成功")
+
+	// Step 7: 删除备份（如果不保留）
+	if !params.KeepBackupVolume {
+		sendProgress(7, "running", "正在删除原引导卷备份...")
+		_, err = blockClient.DeleteBootVolumeBackup(ctx, core.DeleteBootVolumeBackupRequest{
+			BootVolumeBackupId: backupId,
+		})
+		if err != nil {
+			// 不影响后续操作，只记录错误
+			sendProgress(7, "warning", "删除原引导卷备份失败，但不影响继续操作")
+		} else {
+			sendProgress(7, "completed", "删除原引导卷备份成功")
+		}
+	} else {
+		sendProgress(7, "skipped", "保留原引导卷备份")
+	}
+
+	// Step 8: 等待引导卷附件完成
+	sendProgress(8, "running", "正在等待引导卷附件完成...")
+	time.Sleep(5 * time.Second)
+	sendProgress(8, "completed", "引导卷附件完成")
+
+	// Step 9: 启动实例
+	sendProgress(9, "running", "正在启动实例...")
+	for i := 0; i < 30; i++ {
+		instResp, err := computeClient.GetInstance(ctx, core.GetInstanceRequest{InstanceId: instance.Id})
+		if err != nil {
+			continue
+		}
+		if instResp.LifecycleState == core.InstanceLifecycleStateRunning {
+			break
+		}
+		_, _ = computeClient.InstanceAction(ctx, core.InstanceActionRequest{
+			InstanceId: instance.Id,
+			Action:     core.InstanceActionActionStart,
+		})
+		time.Sleep(3 * time.Second)
+	}
+
+	// 获取公网IP
+	publicIP := ""
+	vnicAttachments, err := computeClient.ListVnicAttachments(ctx, core.ListVnicAttachmentsRequest{
+		CompartmentId: instance.CompartmentId,
+		InstanceId:    instance.Id,
+	})
+	if err == nil && len(vnicAttachments.Items) > 0 {
+		vnicId := vnicAttachments.Items[0].VnicId
+		if vnicId != nil {
+			vnicResp, err := vnClient.GetVnic(ctx, core.GetVnicRequest{VnicId: vnicId})
+			if err == nil && vnicResp.PublicIp != nil {
+				publicIP = *vnicResp.PublicIp
+			}
+		}
+	}
+
+	if progressChan != nil {
+		progressChan <- AutoRescueProgress{
+			Step:       9,
+			TotalSteps: 9,
+			Status:     "completed",
+			Message:    "实例救援成功，已启动",
+			PublicIP:   publicIP,
+		}
+	}
+
+	return nil
+}
+
+// Enable500Mbps 一键开启下行500Mbps
+func (s *OCIService) Enable500Mbps(user *models.OciUser, instanceID string, sshPort int) (string, error) {
+	ctx := context.Background()
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return "", fmt.Errorf("failed to get virtual network client: %w", err)
+	}
+
+	nlbClient, err := s.GetNetworkLoadBalancerClient(user)
+	if err != nil {
+		return "", fmt.Errorf("failed to get network load balancer client: %w", err)
+	}
+
+	// 获取实例信息
+	instance, err := s.GetInstanceById(user, instanceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	// 检查是否为AMD实例
+	if !strings.Contains(*instance.Shape, "E2.1.Micro") {
+		return "", fmt.Errorf("only AMD E2.1.Micro instances support 500Mbps")
+	}
+
+	// 获取VCN
+	vcn, err := s.GetVcnByInstanceId(user, instanceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VCN: %w", err)
+	}
+
+	// 获取VNIC
+	vnic, err := s.GetVnicByInstanceId(user, instanceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VNIC: %w", err)
+	}
+
+	// 获取私有IP
+	privateIpResp, err := vnClient.ListPrivateIps(ctx, core.ListPrivateIpsRequest{VnicId: vnic.Id})
+	if err != nil || len(privateIpResp.Items) == 0 {
+		return "", fmt.Errorf("failed to get private IP: %w", err)
+	}
+	privateIP := *privateIpResp.Items[0].IpAddress
+
+	compartmentID := *instance.CompartmentId
+
+	// 创建或获取NAT网关
+	natGatewayResp, err := vnClient.ListNatGateways(ctx, core.ListNatGatewaysRequest{
+		CompartmentId:  &compartmentID,
+		VcnId:          vcn.Id,
+		LifecycleState: core.NatGatewayLifecycleStateAvailable,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to list NAT gateways: %w", err)
+	}
+
+	var natGatewayId *string
+	if len(natGatewayResp.Items) > 0 {
+		natGatewayId = natGatewayResp.Items[0].Id
+	} else {
+		// 创建NAT网关
+		natName := "nat-gateway"
+		createNatResp, err := vnClient.CreateNatGateway(ctx, core.CreateNatGatewayRequest{
+			CreateNatGatewayDetails: core.CreateNatGatewayDetails{
+				CompartmentId: &compartmentID,
+				VcnId:         vcn.Id,
+				DisplayName:   &natName,
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to create NAT gateway: %w", err)
+		}
+		natGatewayId = createNatResp.Id
+
+		// 等待NAT网关可用
+		for {
+			natResp, err := vnClient.GetNatGateway(ctx, core.GetNatGatewayRequest{NatGatewayId: natGatewayId})
+			if err != nil {
+				return "", fmt.Errorf("failed to get NAT gateway status: %w", err)
+			}
+			if natResp.LifecycleState == core.NatGatewayLifecycleStateAvailable {
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	// 获取子网
+	subnetResp, err := vnClient.ListSubnets(ctx, core.ListSubnetsRequest{
+		CompartmentId: &compartmentID,
+		VcnId:         vcn.Id,
+	})
+	if err != nil || len(subnetResp.Items) == 0 {
+		return "", fmt.Errorf("failed to list subnets: %w", err)
+	}
+	subnetId := subnetResp.Items[0].Id
+
+	// 删除现有网络负载均衡器
+	existingNlbResp, err := nlbClient.ListNetworkLoadBalancers(ctx, networkloadbalancer.ListNetworkLoadBalancersRequest{
+		CompartmentId:  &compartmentID,
+		LifecycleState: networkloadbalancer.ListNetworkLoadBalancersLifecycleStateActive,
+	})
+	if err == nil && existingNlbResp.NetworkLoadBalancerCollection.Items != nil {
+		for _, nlb := range existingNlbResp.NetworkLoadBalancerCollection.Items {
+			_, _ = nlbClient.DeleteNetworkLoadBalancer(ctx, networkloadbalancer.DeleteNetworkLoadBalancerRequest{
+				NetworkLoadBalancerId: nlb.Id,
+			})
+		}
+		time.Sleep(5 * time.Second)
+	}
+
+	// 创建网络负载均衡器
+	nlbName := fmt.Sprintf("nlb-%s", time.Now().Format("20060102150405"))
+	isPrivate := false
+	port := 0
+	weight := 1
+	isPreserveSource := true
+	isFailOpen := true
+
+	createNlbResp, err := nlbClient.CreateNetworkLoadBalancer(ctx, networkloadbalancer.CreateNetworkLoadBalancerRequest{
+		CreateNetworkLoadBalancerDetails: networkloadbalancer.CreateNetworkLoadBalancerDetails{
+			CompartmentId: &compartmentID,
+			DisplayName:   &nlbName,
+			SubnetId:      subnetId,
+			IsPrivate:     &isPrivate,
+			Listeners: map[string]networkloadbalancer.ListenerDetails{
+				"listener1": {
+					Name:                  stringPtr("listener1"),
+					DefaultBackendSetName: stringPtr("backend1"),
+					Protocol:              networkloadbalancer.ListenerProtocolsTcpAndUdp,
+					Port:                  &port,
+				},
+			},
+			BackendSets: map[string]networkloadbalancer.BackendSetDetails{
+				"backend1": {
+					Policy:           networkloadbalancer.NetworkLoadBalancingPolicyTwoTuple,
+					IsPreserveSource: &isPreserveSource,
+					IsFailOpen:       &isFailOpen,
+					HealthChecker: &networkloadbalancer.HealthChecker{
+						Protocol: networkloadbalancer.HealthCheckProtocolsTcp,
+						Port:     &sshPort,
+					},
+					Backends: []networkloadbalancer.Backend{
+						{
+							IpAddress: &privateIP,
+							TargetId:  instance.Id,
+							Port:      &port,
+							Weight:    &weight,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create network load balancer: %w", err)
+	}
+
+	nlbId := createNlbResp.Id
+
+	// 等待NLB可用
+	for {
+		nlbResp, err := nlbClient.GetNetworkLoadBalancer(ctx, networkloadbalancer.GetNetworkLoadBalancerRequest{
+			NetworkLoadBalancerId: nlbId,
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to get NLB status: %w", err)
+		}
+		if nlbResp.LifecycleState == networkloadbalancer.LifecycleStateActive {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+
+	// 获取NLB公网IP
+	nlbResp, err := nlbClient.GetNetworkLoadBalancer(ctx, networkloadbalancer.GetNetworkLoadBalancerRequest{
+		NetworkLoadBalancerId: nlbId,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get NLB: %w", err)
+	}
+
+	var publicIP string
+	for _, ip := range nlbResp.IpAddresses {
+		if ip.IpAddress != nil && !isPrivateIP(*ip.IpAddress) {
+			publicIP = *ip.IpAddress
+			break
+		}
+	}
+
+	// 创建或更新NAT路由表
+	routeTableResp, err := vnClient.ListRouteTables(ctx, core.ListRouteTablesRequest{
+		CompartmentId:  &compartmentID,
+		VcnId:          vcn.Id,
+		LifecycleState: core.RouteTableLifecycleStateAvailable,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to list route tables: %w", err)
+	}
+
+	var natRouteTableId *string
+	for _, rt := range routeTableResp.Items {
+		for _, rule := range rt.RouteRules {
+			if rule.NetworkEntityId != nil && *rule.NetworkEntityId == *natGatewayId &&
+				rule.Destination != nil && *rule.Destination == "0.0.0.0/0" {
+				natRouteTableId = rt.Id
+				break
+			}
+		}
+		if natRouteTableId != nil {
+			break
+		}
+	}
+
+	if natRouteTableId == nil {
+		// 创建新路由表
+		rtName := "nat-route"
+		destination := "0.0.0.0/0"
+		createRtResp, err := vnClient.CreateRouteTable(ctx, core.CreateRouteTableRequest{
+			CreateRouteTableDetails: core.CreateRouteTableDetails{
+				CompartmentId: &compartmentID,
+				VcnId:         vcn.Id,
+				DisplayName:   &rtName,
+				RouteRules: []core.RouteRule{
+					{
+						Destination:     &destination,
+						NetworkEntityId: natGatewayId,
+						DestinationType: core.RouteRuleDestinationTypeCidrBlock,
+					},
+				},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to create route table: %w", err)
+		}
+		natRouteTableId = createRtResp.Id
+
+		// 等待路由表可用
+		for {
+			rtResp, err := vnClient.GetRouteTable(ctx, core.GetRouteTableRequest{RtId: natRouteTableId})
+			if err != nil {
+				return "", fmt.Errorf("failed to get route table status: %w", err)
+			}
+			if rtResp.LifecycleState == core.RouteTableLifecycleStateAvailable {
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	// 更新VNIC绑定路由表并跳过源/目的地检查
+	skipSourceDestCheck := true
+	_, err = vnClient.UpdateVnic(ctx, core.UpdateVnicRequest{
+		VnicId: vnic.Id,
+		UpdateVnicDetails: core.UpdateVnicDetails{
+			SkipSourceDestCheck: &skipSourceDestCheck,
+			RouteTableId:        natRouteTableId,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to update VNIC: %w", err)
+	}
+
+	// 放行安全规则
+	_ = s.ReleaseSecurityRules(user, *vcn.Id)
+
+	return publicIP, nil
+}
+
+// Disable500Mbps 关闭下行500Mbps
+func (s *OCIService) Disable500Mbps(user *models.OciUser, instanceID string, retainNatGw, retainNlb bool) error {
+	ctx := context.Background()
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return fmt.Errorf("failed to get virtual network client: %w", err)
+	}
+
+	nlbClient, err := s.GetNetworkLoadBalancerClient(user)
+	if err != nil {
+		return fmt.Errorf("failed to get network load balancer client: %w", err)
+	}
+
+	// 获取实例信息
+	instance, err := s.GetInstanceById(user, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	// 检查是否为AMD实例
+	if !strings.Contains(*instance.Shape, "E2.1.Micro") {
+		return fmt.Errorf("only AMD E2.1.Micro instances support this operation")
+	}
+
+	// 获取VCN
+	vcn, err := s.GetVcnByInstanceId(user, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get VCN: %w", err)
+	}
+
+	// 获取VNIC
+	vnic, err := s.GetVnicByInstanceId(user, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get VNIC: %w", err)
+	}
+
+	compartmentID := *instance.CompartmentId
+
+	// 获取所有路由表
+	routeTableResp, err := vnClient.ListRouteTables(ctx, core.ListRouteTablesRequest{
+		CompartmentId:  &compartmentID,
+		VcnId:          vcn.Id,
+		LifecycleState: core.RouteTableLifecycleStateAvailable,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list route tables: %w", err)
+	}
+
+	// 查找默认路由表（不含NAT规则的）
+	var defaultRouteTableId *string
+	var natRouteTableIds []*string
+	for _, rt := range routeTableResp.Items {
+		hasNatRule := false
+		for _, rule := range rt.RouteRules {
+			if rule.Destination != nil && *rule.Destination == "0.0.0.0/0" {
+				// 检查是否指向NAT网关
+				natGwResp, _ := vnClient.ListNatGateways(ctx, core.ListNatGatewaysRequest{
+					CompartmentId:  &compartmentID,
+					VcnId:          vcn.Id,
+					LifecycleState: core.NatGatewayLifecycleStateAvailable,
+				})
+				for _, natGw := range natGwResp.Items {
+					if rule.NetworkEntityId != nil && *rule.NetworkEntityId == *natGw.Id {
+						hasNatRule = true
+						break
+					}
+				}
+			}
+		}
+		if hasNatRule {
+			natRouteTableIds = append(natRouteTableIds, rt.Id)
+		} else if defaultRouteTableId == nil {
+			defaultRouteTableId = rt.Id
+		}
+	}
+
+	if defaultRouteTableId == nil && len(routeTableResp.Items) > 0 {
+		defaultRouteTableId = routeTableResp.Items[0].Id
+	}
+
+	// 更新VNIC绑定到默认路由表
+	if defaultRouteTableId != nil {
+		skipSourceDestCheck := true
+		_, err = vnClient.UpdateVnic(ctx, core.UpdateVnicRequest{
+			VnicId: vnic.Id,
+			UpdateVnicDetails: core.UpdateVnicDetails{
+				SkipSourceDestCheck: &skipSourceDestCheck,
+				RouteTableId:        defaultRouteTableId,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to update VNIC: %w", err)
+		}
+	}
+
+	// 删除NAT路由表
+	if !retainNatGw {
+		for _, rtId := range natRouteTableIds {
+			// 先清空路由规则
+			_, _ = vnClient.UpdateRouteTable(ctx, core.UpdateRouteTableRequest{
+				RtId: rtId,
+				UpdateRouteTableDetails: core.UpdateRouteTableDetails{
+					RouteRules: []core.RouteRule{},
+				},
+			})
+			time.Sleep(2 * time.Second)
+			// 删除路由表
+			_, _ = vnClient.DeleteRouteTable(ctx, core.DeleteRouteTableRequest{RtId: rtId})
+		}
+
+		// 删除NAT网关
+		natGwResp, _ := vnClient.ListNatGateways(ctx, core.ListNatGatewaysRequest{
+			CompartmentId:  &compartmentID,
+			VcnId:          vcn.Id,
+			LifecycleState: core.NatGatewayLifecycleStateAvailable,
+		})
+		for _, natGw := range natGwResp.Items {
+			_, _ = vnClient.DeleteNatGateway(ctx, core.DeleteNatGatewayRequest{NatGatewayId: natGw.Id})
+		}
+	}
+
+	// 删除网络负载均衡器
+	if !retainNlb {
+		nlbResp, _ := nlbClient.ListNetworkLoadBalancers(ctx, networkloadbalancer.ListNetworkLoadBalancersRequest{
+			CompartmentId: &compartmentID,
+		})
+		if nlbResp.NetworkLoadBalancerCollection.Items != nil {
+			for _, nlb := range nlbResp.NetworkLoadBalancerCollection.Items {
+				_, _ = nlbClient.DeleteNetworkLoadBalancer(ctx, networkloadbalancer.DeleteNetworkLoadBalancerRequest{
+					NetworkLoadBalancerId: nlb.Id,
+				})
+			}
+		}
+	}
+
+	return nil
+}
+
+// ReleaseSecurityRules 放行安全规则
+func (s *OCIService) ReleaseSecurityRules(user *models.OciUser, vcnId string) error {
+	ctx := context.Background()
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return fmt.Errorf("failed to get virtual network client: %w", err)
+	}
+
+	// 获取VCN
+	vcnResp, err := vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: &vcnId})
+	if err != nil {
+		return fmt.Errorf("failed to get VCN: %w", err)
+	}
+
+	// 获取安全列表
+	secListResp, err := vnClient.ListSecurityLists(ctx, core.ListSecurityListsRequest{
+		CompartmentId: vcnResp.CompartmentId,
+		VcnId:         &vcnId,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list security lists: %w", err)
+	}
+
+	allProtocol := "all"
+	ipv4Cidr := "0.0.0.0/0"
+	ipv6Cidr := "::/0"
+	internalCidr := "10.0.0.0/16"
+
+	for _, secList := range secListResp.Items {
+		// 更新入站规则
+		ingressRules := []core.IngressSecurityRule{
+			{
+				Protocol: &allProtocol,
+				Source:   &ipv4Cidr,
+			},
+			{
+				Protocol: &allProtocol,
+				Source:   &ipv6Cidr,
+			},
+			{
+				Protocol: &allProtocol,
+				Source:   &internalCidr,
+			},
+		}
+
+		// 更新出站规则
+		egressRules := []core.EgressSecurityRule{
+			{
+				Protocol:    &allProtocol,
+				Destination: &ipv4Cidr,
+			},
+			{
+				Protocol:    &allProtocol,
+				Destination: &ipv6Cidr,
+			},
+		}
+
+		_, err = vnClient.UpdateSecurityList(ctx, core.UpdateSecurityListRequest{
+			SecurityListId: secList.Id,
+			UpdateSecurityListDetails: core.UpdateSecurityListDetails{
+				IngressSecurityRules: ingressRules,
+				EgressSecurityRules:  egressRules,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to update security list: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// GetVcnByInstanceId 根据实例ID获取VCN
+func (s *OCIService) GetVcnByInstanceId(user *models.OciUser, instanceID string) (*core.Vcn, error) {
+	ctx := context.Background()
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get virtual network client: %w", err)
+	}
+
+	vnic, err := s.GetVnicByInstanceId(user, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取子网
+	subnetResp, err := vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: vnic.SubnetId})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subnet: %w", err)
+	}
+
+	// 获取VCN
+	vcnResp, err := vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: subnetResp.VcnId})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VCN: %w", err)
+	}
+
+	return &vcnResp.Vcn, nil
+}
+
+// GetVnicByInstanceId 根据实例ID获取VNIC
+func (s *OCIService) GetVnicByInstanceId(user *models.OciUser, instanceID string) (*core.Vnic, error) {
+	ctx := context.Background()
+
+	computeClient, err := s.GetComputeClient(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get compute client: %w", err)
+	}
+
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get virtual network client: %w", err)
+	}
+
+	// 获取实例
+	instResp, err := computeClient.GetInstance(ctx, core.GetInstanceRequest{InstanceId: &instanceID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	// 获取VNIC附件
+	vnicAttachResp, err := computeClient.ListVnicAttachments(ctx, core.ListVnicAttachmentsRequest{
+		CompartmentId: instResp.CompartmentId,
+		InstanceId:    &instanceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list VNIC attachments: %w", err)
+	}
+
+	if len(vnicAttachResp.Items) == 0 {
+		return nil, fmt.Errorf("no VNIC attachment found")
+	}
+
+	// 获取VNIC
+	vnicResp, err := vnClient.GetVnic(ctx, core.GetVnicRequest{VnicId: vnicAttachResp.Items[0].VnicId})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VNIC: %w", err)
+	}
+
+	return &vnicResp.Vnic, nil
+}
+
+// isPrivateIP 检查是否为私有IP
+func isPrivateIP(ip string) bool {
+	return strings.HasPrefix(ip, "10.") ||
+		strings.HasPrefix(ip, "172.16.") ||
+		strings.HasPrefix(ip, "172.17.") ||
+		strings.HasPrefix(ip, "172.18.") ||
+		strings.HasPrefix(ip, "172.19.") ||
+		strings.HasPrefix(ip, "172.20.") ||
+		strings.HasPrefix(ip, "172.21.") ||
+		strings.HasPrefix(ip, "172.22.") ||
+		strings.HasPrefix(ip, "172.23.") ||
+		strings.HasPrefix(ip, "172.24.") ||
+		strings.HasPrefix(ip, "172.25.") ||
+		strings.HasPrefix(ip, "172.26.") ||
+		strings.HasPrefix(ip, "172.27.") ||
+		strings.HasPrefix(ip, "172.28.") ||
+		strings.HasPrefix(ip, "172.29.") ||
+		strings.HasPrefix(ip, "172.30.") ||
+		strings.HasPrefix(ip, "172.31.") ||
+		strings.HasPrefix(ip, "192.168.")
 }

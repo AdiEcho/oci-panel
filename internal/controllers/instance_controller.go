@@ -208,3 +208,114 @@ func (ic *InstanceController) CreateCloudShell(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.SuccessResponse(result, "Cloud Shell连接创建成功"))
 }
+
+type AttachIPv6Request struct {
+	UserId     string `json:"userId" binding:"required"`
+	InstanceId string `json:"instanceId" binding:"required"`
+}
+
+func (ic *InstanceController) AttachIPv6(c *gin.Context) {
+	var req AttachIPv6Request
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	ipv6Address, err := ic.instanceService.AttachIPv6(req.UserId, req.InstanceId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(map[string]string{"ipv6": ipv6Address}, "IPv6附加成功"))
+}
+
+type AutoRescueRequest struct {
+	UserId       string `json:"userId" binding:"required"`
+	InstanceId   string `json:"instanceId" binding:"required"`
+	InstanceName string `json:"instanceName"`
+	KeepBackup   bool   `json:"keepBackup"`
+}
+
+func (ic *InstanceController) AutoRescue(c *gin.Context) {
+	var req AutoRescueRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	// 异步执行救援任务
+	go func() {
+		progressChan := make(chan services.AutoRescueProgress, 10)
+		go func() {
+			for progress := range progressChan {
+				// 进度可通过WebSocket推送，这里仅记录日志
+				_ = progress
+			}
+		}()
+
+		err := ic.instanceService.AutoRescue(req.UserId, req.InstanceId, req.InstanceName, req.KeepBackup, progressChan)
+		close(progressChan)
+		if err != nil {
+			// 记录错误日志
+			_ = err
+		}
+	}()
+
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, "自动救援任务已启动，请等待完成"))
+}
+
+type Enable500MbpsRequest struct {
+	UserId     string `json:"userId" binding:"required"`
+	InstanceId string `json:"instanceId" binding:"required"`
+	SSHPort    int    `json:"sshPort"`
+}
+
+func (ic *InstanceController) Enable500Mbps(c *gin.Context) {
+	var req Enable500MbpsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	if req.SSHPort == 0 {
+		req.SSHPort = 22
+	}
+
+	// 异步执行
+	go func() {
+		publicIP, err := ic.instanceService.Enable500Mbps(req.UserId, req.InstanceId, req.SSHPort)
+		if err != nil {
+			_ = err
+		} else {
+			_ = publicIP
+		}
+	}()
+
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, "500Mbps开启任务已启动，请等待完成"))
+}
+
+type Disable500MbpsRequest struct {
+	UserId      string `json:"userId" binding:"required"`
+	InstanceId  string `json:"instanceId" binding:"required"`
+	RetainNatGw bool   `json:"retainNatGw"`
+	RetainNlb   bool   `json:"retainNlb"`
+}
+
+func (ic *InstanceController) Disable500Mbps(c *gin.Context) {
+	var req Disable500MbpsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	// 异步执行
+	go func() {
+		err := ic.instanceService.Disable500Mbps(req.UserId, req.InstanceId, req.RetainNatGw, req.RetainNlb)
+		if err != nil {
+			_ = err
+		}
+	}()
+
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, "500Mbps关闭任务已启动，请等待完成"))
+}
