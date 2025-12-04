@@ -8,7 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
+type Services struct {
+	Scheduler *services.SchedulerService
+	Task      *services.TaskService
+}
+
+func Setup(r *gin.Engine, cfg *config.Config) *Services {
 	r.Use(middleware.CORS())
 	r.Use(middleware.AuthMiddleware())
 
@@ -27,6 +32,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 	_ = services.NewVolumeService(ociService)
 	wsService := services.NewWebSocketService()
 	schedulerService := services.NewSchedulerService(ociService)
+	taskService := services.NewTaskService(ociService)
 
 	wsCtrl := controllers.NewWebSocketController(wsService)
 	r.GET("/ws/logs", wsCtrl.HandleWebSocket)
@@ -72,6 +78,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 			oci.POST("/vcn/addSecurityRule", ociCtrl.AddSecurityRule)
 			oci.POST("/vcn/releaseSecurityRules", ociCtrl.ReleaseSecurityRules)
 			oci.POST("/vcn/delete", ociCtrl.DeleteVcn)
+			oci.POST("/images", ociCtrl.ListImages)
 		}
 
 		instanceCtrl := controllers.NewInstanceController(instanceService)
@@ -115,6 +122,18 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 			key.GET("/standalone", keyCtrl.GetAllStandaloneKeys)
 			key.GET("/detail", keyCtrl.GetKeyByID)
 		}
+
+		taskCtrl := controllers.NewTaskController(taskService)
+		task := api.Group("/task")
+		{
+			task.POST("/create", taskCtrl.CreateTask)
+			task.POST("/list", taskCtrl.TaskList)
+			task.POST("/start", taskCtrl.StartTask)
+			task.POST("/stop", taskCtrl.StopTask)
+			task.POST("/delete", taskCtrl.DeleteTask)
+			task.POST("/logs", taskCtrl.TaskLogs)
+			task.POST("/clearLogs", taskCtrl.ClearTaskLogs)
+		}
 	}
 
 	// SPA fallback - 所有未匹配的路由都返回 index.html，让前端路由接管
@@ -122,5 +141,8 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 		c.File("./frontend/dist/index.html")
 	})
 
-	return schedulerService
+	return &Services{
+		Scheduler: schedulerService,
+		Task:      taskService,
+	}
 }

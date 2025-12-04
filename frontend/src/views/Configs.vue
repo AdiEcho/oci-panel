@@ -2,13 +2,40 @@
   <div class="space-y-6">
     <!-- 页面标题 -->
     <div class="flex justify-between items-center">
-      <h1 class="text-3xl font-bold">配置管理</h1>
-      <button class="btn btn-primary" @click="showAddModal = true">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        添加配置
-      </button>
+      <div class="flex items-center gap-4">
+        <h1 class="text-3xl font-bold">配置管理</h1>
+        <span v-if="selectedConfigIds.length > 0" class="text-sm text-slate-400">
+          已选择 {{ selectedConfigIds.length }} 项
+        </span>
+      </div>
+      <div class="flex gap-2">
+        <button 
+          v-if="selectedConfigIds.length > 0" 
+          class="btn btn-success" 
+          @click="batchCreateInstance"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          批量创建实例
+        </button>
+        <button 
+          v-if="selectedConfigIds.length > 0" 
+          class="btn btn-danger" 
+          @click="batchDeleteConfigs"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          批量删除
+        </button>
+        <button class="btn btn-primary" @click="showAddModal = true">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          添加配置
+        </button>
+      </div>
     </div>
 
     <!-- 配置列表卡片 -->
@@ -27,6 +54,15 @@
         <table class="w-full">
           <thead class="bg-slate-700/50">
             <tr>
+              <th class="px-4 py-4 text-center w-12">
+                <input 
+                  type="checkbox" 
+                  class="checkbox" 
+                  :checked="isAllSelected" 
+                  :indeterminate="isIndeterminate"
+                  @change="toggleSelectAll"
+                />
+              </th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">配置名</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">租户名称</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">租户创建时间</th>
@@ -37,7 +73,7 @@
           </thead>
           <tbody class="divide-y divide-slate-700">
             <tr v-if="loading">
-              <td colspan="6" class="px-6 py-8 text-center text-slate-400">
+              <td colspan="7" class="px-6 py-8 text-center text-slate-400">
                 <svg class="animate-spin h-8 w-8 mx-auto" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path
@@ -49,9 +85,17 @@
               </td>
             </tr>
             <tr v-else-if="!configs.length">
-              <td colspan="6" class="px-6 py-8 text-center text-slate-400">暂无配置</td>
+              <td colspan="7" class="px-6 py-8 text-center text-slate-400">暂无配置</td>
             </tr>
             <tr v-for="config in configs" v-else :key="config.id" class="hover:bg-slate-700/30">
+              <td class="px-4 py-4 text-center">
+                <input 
+                  type="checkbox" 
+                  class="checkbox" 
+                  :checked="selectedConfigIds.includes(config.id)"
+                  @change="toggleSelectConfig(config.id)"
+                />
+              </td>
               <td class="px-6 py-4 font-medium">{{ config.username }}</td>
               <td class="px-6 py-4">{{ config.tenantName || '-' }}</td>
               <td class="px-6 py-4 text-sm text-slate-400">{{ config.tenantCreateTime || '-' }}</td>
@@ -917,8 +961,8 @@
                     <div class="flex gap-2 mt-3 pt-3 border-t border-slate-600">
                       <button 
                         class="btn btn-primary btn-sm" 
-                        @click="viewSecurityList(vcn)"
                         title="查看安全列表"
+                        @click="viewSecurityList(vcn)"
                       >
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -927,9 +971,9 @@
                       </button>
                       <button 
                         class="btn btn-success btn-sm" 
-                        @click="releaseVcnRules(vcn)"
                         :disabled="vcnActionLoading[vcn.id]"
                         title="一键放行所有端口"
+                        @click="releaseVcnRules(vcn)"
                       >
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -938,9 +982,9 @@
                       </button>
                       <button 
                         class="btn btn-danger btn-sm" 
-                        @click="deleteVcn(vcn)"
                         :disabled="vcnActionLoading[vcn.id]"
                         title="删除VCN"
+                        @click="deleteVcn(vcn)"
                       >
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1114,6 +1158,112 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-2">架构</label>
+              <select v-model="instanceForm.architecture" class="input" required @change="onArchitectureChange">
+                <option value="ARM">ARM</option>
+                <option value="AMD">AMD</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">操作系统类型</label>
+              <select v-model="instanceForm.operationSystem" class="input" required @change="onOperationSystemChange">
+                <option value="Ubuntu">Ubuntu</option>
+                <option value="CentOS">CentOS</option>
+                <option value="Oracle Linux">Oracle Linux</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">系统版本</label>
+              <select v-model="instanceForm.imageId" class="input" :disabled="loadingImages">
+                <option value="">{{ loadingImages ? '加载中...' : (filteredImages.length === 0 ? '无可用镜像' : '自动选择最新版本') }}</option>
+                <option v-for="img in filteredImages" :key="img.id" :value="img.id">
+                  {{ img.operatingSystem }} {{ img.operatingSystemVersion }}
+                </option>
+              </select>
+              <p class="text-xs text-slate-400 mt-1">
+                {{ filteredImages.length > 0 ? `共 ${filteredImages.length} 个可用镜像` : '' }}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">SSH公钥</label>
+            <select v-model="instanceForm.sshKeyId" class="input" required>
+              <option value="">请选择SSH公钥</option>
+              <option v-for="key in sshKeys" :key="key.id" :value="key.id">{{ key.name }}</option>
+            </select>
+            <p class="text-xs text-slate-400 mt-2">
+              请先在 <router-link to="/keys" class="text-blue-400 hover:underline">密钥管理</router-link> 中添加SSH公钥
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">执行间隔（秒）</label>
+            <input v-model.number="instanceForm.interval" type="number" min="10" class="input" placeholder="60" />
+            <p class="text-xs text-slate-400 mt-2">
+              任务将每隔指定秒数尝试创建实例，创建成功后自动停止。最小10秒。
+            </p>
+          </div>
+
+          <div class="flex gap-3 pt-4">
+            <button type="button" class="btn btn-secondary flex-1" @click="closeInstanceModal">取消</button>
+            <button type="submit" class="btn btn-primary flex-1" :disabled="submittingInstance">
+              {{ submittingInstance ? '创建中...' : '创建任务' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 批量创建实例弹窗 -->
+    <div
+      v-if="showBatchCreateModal"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
+      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b border-slate-700 flex justify-between items-center">
+          <h3 class="text-xl font-bold">批量创建实例任务</h3>
+          <button class="text-slate-400 hover:text-white" @click="closeBatchCreateModal">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form class="p-6 space-y-4" @submit.prevent="submitBatchInstanceTask">
+          <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
+            <p class="text-sm text-blue-300">
+              <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              将为 <strong>{{ selectedConfigIds.length }}</strong> 个配置批量创建实例（每个配置使用其自身区域）
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">CPU核心数</label>
+              <input v-model.number="instanceForm.ocpus" type="number" step="0.1" min="0.1" class="input" required />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">内存(GB)</label>
+              <input v-model.number="instanceForm.memory" type="number" step="0.1" min="0.1" class="input" required />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">磁盘(GB)</label>
+              <input v-model.number="instanceForm.disk" type="number" min="50" class="input" required />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-300 mb-2">架构</label>
               <select v-model="instanceForm.architecture" class="input" required>
                 <option value="ARM">ARM</option>
                 <option value="AMD">AMD</option>
@@ -1141,10 +1291,18 @@
             </p>
           </div>
 
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">执行间隔（秒）</label>
+            <input v-model.number="instanceForm.interval" type="number" min="10" class="input" placeholder="60" />
+            <p class="text-xs text-slate-400 mt-2">
+              每个任务将每隔指定秒数尝试创建实例，创建成功后自动停止。最小10秒。
+            </p>
+          </div>
+
           <div class="flex gap-3 pt-4">
-            <button type="button" class="btn btn-secondary flex-1" @click="closeInstanceModal">取消</button>
+            <button type="button" class="btn btn-secondary flex-1" @click="closeBatchCreateModal">取消</button>
             <button type="submit" class="btn btn-primary flex-1" :disabled="submittingInstance">
-              {{ submittingInstance ? '创建中...' : '创建任务' }}
+              {{ submittingInstance ? '创建中...' : '批量创建' }}
             </button>
           </div>
         </form>
@@ -1797,7 +1955,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import api from '../utils/api'
 import { toast } from '../utils/toast'
 
@@ -1808,6 +1966,19 @@ const currentPage = ref(1)
 const pageSize = 10
 const totalPages = ref(0)
 const searchText = ref('')
+
+// 批量选择状态
+const selectedConfigIds = ref([])
+const showBatchCreateModal = ref(false)
+
+// 计算属性：全选状态
+const isAllSelected = computed(() => {
+  return configs.value.length > 0 && selectedConfigIds.value.length === configs.value.length
+})
+
+const isIndeterminate = computed(() => {
+  return selectedConfigIds.value.length > 0 && selectedConfigIds.value.length < configs.value.length
+})
 
 // 弹窗状态
 const showAddModal = ref(false)
@@ -1878,10 +2049,15 @@ const instanceForm = ref({
   disk: 50,
   architecture: 'ARM',
   operationSystem: 'Ubuntu',
-  sshKeyId: ''
+  imageId: '',
+  sshKeyId: '',
+  interval: 60
 })
 
 const sshKeys = ref([])
+const availableImages = ref([])
+const filteredImages = ref([])
+const loadingImages = ref(false)
 
 const userForm = ref({ email: '', dbUserName: '', description: '' })
 
@@ -1982,6 +2158,86 @@ const loadConfigs = async (page = 1) => {
 }
 
 const handleSearch = () => loadConfigs(1)
+
+// 选择操作
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedConfigIds.value = []
+  } else {
+    selectedConfigIds.value = configs.value.map(c => c.id)
+  }
+}
+
+const toggleSelectConfig = (id) => {
+  const index = selectedConfigIds.value.indexOf(id)
+  if (index > -1) {
+    selectedConfigIds.value.splice(index, 1)
+  } else {
+    selectedConfigIds.value.push(id)
+  }
+}
+
+// 批量删除
+const batchDeleteConfigs = async () => {
+  if (selectedConfigIds.value.length === 0) {
+    toast.warning('请先选择要删除的配置')
+    return
+  }
+  if (!confirm(`确定要删除选中的 ${selectedConfigIds.value.length} 个配置吗？`)) return
+  try {
+    await api.post('/oci/removeCfg', { ids: selectedConfigIds.value })
+    toast.success('批量删除成功')
+    selectedConfigIds.value = []
+    await loadConfigs(currentPage.value)
+  } catch (error) {
+    toast.error(error.message || '批量删除失败')
+  }
+}
+
+// 批量创建实例
+const batchCreateInstance = async () => {
+  if (selectedConfigIds.value.length === 0) {
+    toast.warning('请先选择配置')
+    return
+  }
+  await loadSSHKeys()
+  showBatchCreateModal.value = true
+}
+
+const closeBatchCreateModal = () => {
+  showBatchCreateModal.value = false
+}
+
+const submitBatchInstanceTask = async () => {
+  if (!instanceForm.value.sshKeyId) {
+    toast.warning('请选择SSH公钥')
+    return
+  }
+  submittingInstance.value = true
+  try {
+    for (const configId of selectedConfigIds.value) {
+      const config = configs.value.find(c => c.id === configId)
+      await api.post('/task/create', { 
+        userId: configId, 
+        ociRegion: config?.ociRegion || instanceForm.value.ociRegion,
+        ocpus: instanceForm.value.ocpus,
+        memory: instanceForm.value.memory,
+        disk: instanceForm.value.disk,
+        architecture: instanceForm.value.architecture,
+        operationSystem: instanceForm.value.operationSystem,
+        sshKeyId: instanceForm.value.sshKeyId,
+        interval: instanceForm.value.interval || 60
+      })
+    }
+    toast.success(`已为 ${selectedConfigIds.value.length} 个配置创建定时任务，可在任务列表查看`)
+    closeBatchCreateModal()
+    selectedConfigIds.value = []
+  } catch (error) {
+    toast.error(error.message || '批量创建失败')
+  } finally {
+    submittingInstance.value = false
+  }
+}
 
 const closeModal = () => {
   showAddModal.value = false
@@ -2089,17 +2345,81 @@ const loadSSHKeys = async () => {
   }
 }
 
+// 加载可用镜像列表
+const loadImages = async (configId, region, architecture) => {
+  if (!configId || !region || !architecture) return
+  loadingImages.value = true
+  try {
+    const response = await api.post('/oci/images', { configId, region, architecture })
+    availableImages.value = response.data || []
+    filterImagesByOS()
+  } catch (error) {
+    console.error('加载镜像列表失败:', error)
+    availableImages.value = []
+    filteredImages.value = []
+  } finally {
+    loadingImages.value = false
+  }
+}
+
+// 根据操作系统类型过滤镜像
+const filterImagesByOS = () => {
+  const os = instanceForm.value.operationSystem
+  let osKeyword = ''
+  if (os === 'Ubuntu') {
+    osKeyword = 'Ubuntu'
+  } else if (os === 'CentOS') {
+    osKeyword = 'CentOS'
+  } else if (os === 'Oracle Linux') {
+    osKeyword = 'Oracle'
+  }
+  
+  if (osKeyword) {
+    filteredImages.value = availableImages.value.filter(img => 
+      img.operatingSystem.toLowerCase().includes(osKeyword.toLowerCase())
+    )
+  } else {
+    filteredImages.value = availableImages.value
+  }
+  
+  // 默认选择第一个镜像
+  if (filteredImages.value.length > 0) {
+    instanceForm.value.imageId = filteredImages.value[0].id
+  } else {
+    instanceForm.value.imageId = ''
+  }
+}
+
+// 架构或区域变化时重新加载镜像
+const onArchitectureChange = async () => {
+  if (selectedConfigForInstance.value) {
+    await loadImages(
+      selectedConfigForInstance.value.id,
+      instanceForm.value.ociRegion,
+      instanceForm.value.architecture
+    )
+  }
+}
+
+// 操作系统变化时过滤镜像
+const onOperationSystemChange = () => {
+  filterImagesByOS()
+}
+
 // 创建实例
 const createInstance = async (config) => {
   selectedConfigForInstance.value = config
   instanceForm.value.ociRegion = config.ociRegion
   await loadSSHKeys()
+  await loadImages(config.id, config.ociRegion, instanceForm.value.architecture)
   showCreateInstanceModal.value = true
 }
 
 const closeInstanceModal = () => {
   showCreateInstanceModal.value = false
   selectedConfigForInstance.value = null
+  availableImages.value = []
+  filteredImages.value = []
   instanceForm.value = {
     ociRegion: '',
     ocpus: 1,
@@ -2107,15 +2427,29 @@ const closeInstanceModal = () => {
     disk: 50,
     architecture: 'ARM',
     operationSystem: 'Ubuntu',
-    sshKeyId: ''
+    imageId: '',
+    sshKeyId: '',
+    interval: 60
   }
 }
 
 const submitInstanceTask = async () => {
   submittingInstance.value = true
   try {
-    await api.post('/oci/createInstance', { userId: selectedConfigForInstance.value.id, ...instanceForm.value })
-    toast.success('实例任务创建成功')
+    const payload = {
+      userId: selectedConfigForInstance.value.id,
+      ociRegion: instanceForm.value.ociRegion,
+      ocpus: instanceForm.value.ocpus,
+      memory: instanceForm.value.memory,
+      disk: instanceForm.value.disk,
+      architecture: instanceForm.value.architecture,
+      operationSystem: instanceForm.value.operationSystem,
+      imageId: instanceForm.value.imageId,
+      sshKeyId: instanceForm.value.sshKeyId,
+      interval: instanceForm.value.interval || 60
+    }
+    await api.post('/task/create', payload)
+    toast.success('定时任务创建成功，可在任务列表查看执行状态')
     closeInstanceModal()
   } catch (error) {
     toast.error(error.message || '创建失败')
@@ -2684,7 +3018,7 @@ const updateVolumeConfig = async () => {
       toast.success('引导卷配置更新成功')
       volumeEditDialogVisible.value = false
       // 刷新引导卷列表
-      loadTabData('volumes')
+      loadVolumes()
     } else {
       toast.error(response.data?.msg || '引导卷配置更新失败')
     }
@@ -2838,7 +3172,7 @@ const deleteVcn = async (vcn) => {
       vcnId: vcn.id
     })
     toast.success('VCN删除成功')
-    loadTabData('vcns')
+    loadVCNs()
   } catch (error) {
     toast.error(error.message || '删除VCN失败')
   } finally {

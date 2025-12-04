@@ -252,6 +252,132 @@ func (s *OCIService) LaunchInstance(ctx context.Context, user *models.OciUser, p
 	return &resp.Instance, nil
 }
 
+// CreateInstance 自动创建实例（自动获取AD、VCN、子网，可指定镜像ID）
+func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, region, architecture, operationSystem string, ocpus, memory float64, disk int, sshPublicKey string, imageIdParam string) error {
+	// 临时切换用户区域
+	originalRegion := user.OciRegion
+	user.OciRegion = region
+	defer func() { user.OciRegion = originalRegion }()
+
+	compartmentId := user.OciTenantID
+
+	// 1. 获取身份客户端
+	identityClient, err := s.GetIdentityClient(user)
+	if err != nil {
+		return fmt.Errorf("获取身份客户端失败: %w", err)
+	}
+
+	// 2. 获取可用域列表
+	adResp, err := identityClient.ListAvailabilityDomains(ctx, identity.ListAvailabilityDomainsRequest{
+		CompartmentId: &compartmentId,
+	})
+	if err != nil {
+		return fmt.Errorf("获取可用域失败: %w", err)
+	}
+	if len(adResp.Items) == 0 {
+		return fmt.Errorf("没有可用的可用域")
+	}
+	availabilityDomain := *adResp.Items[0].Name
+
+	// 3. 获取或创建VCN和子网
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return fmt.Errorf("获取网络客户端失败: %w", err)
+	}
+
+	// 列出现有VCN
+	vcnResp, err := vnClient.ListVcns(ctx, core.ListVcnsRequest{
+		CompartmentId: &compartmentId,
+	})
+	if err != nil {
+		return fmt.Errorf("获取VCN列表失败: %w", err)
+	}
+
+	var subnetId string
+	if len(vcnResp.Items) > 0 {
+		// 使用现有VCN的子网
+		vcn := vcnResp.Items[0]
+		subnetResp, err := vnClient.ListSubnets(ctx, core.ListSubnetsRequest{
+			CompartmentId: &compartmentId,
+			VcnId:         vcn.Id,
+		})
+		if err != nil {
+			return fmt.Errorf("获取子网列表失败: %w", err)
+		}
+		if len(subnetResp.Items) > 0 {
+			subnetId = *subnetResp.Items[0].Id
+		}
+	}
+
+	if subnetId == "" {
+		return fmt.Errorf("没有可用的子网，请先创建VCN和子网")
+	}
+
+	// 4. 确定Shape
+	shape := "VM.Standard.A1.Flex"
+	if architecture == "AMD" {
+		shape = "VM.Standard.E2.1.Micro"
+	}
+
+	// 5. 获取镜像
+	var imageId string
+	if imageIdParam != "" {
+		// 使用指定的镜像ID
+		imageId = imageIdParam
+	} else {
+		// 自动获取最新镜像
+		computeClient, err := s.GetComputeClient(user)
+		if err != nil {
+			return fmt.Errorf("获取计算客户端失败: %w", err)
+		}
+
+		osName := "Canonical Ubuntu"
+		if operationSystem == "CentOS" {
+			osName = "CentOS"
+		} else if operationSystem == "Oracle Linux" {
+			osName = "Oracle Linux"
+		}
+
+		imageResp, err := computeClient.ListImages(ctx, core.ListImagesRequest{
+			CompartmentId:   &compartmentId,
+			OperatingSystem: &osName,
+			Shape:           &shape,
+			SortBy:          core.ListImagesSortByTimecreated,
+			SortOrder:       core.ListImagesSortOrderDesc,
+		})
+		if err != nil {
+			return fmt.Errorf("获取镜像列表失败: %w", err)
+		}
+		if len(imageResp.Items) == 0 {
+			return fmt.Errorf("没有找到合适的镜像")
+		}
+		imageId = *imageResp.Items[0].Id
+	}
+
+	// 6. 生成实例名称
+	displayName := fmt.Sprintf("instance-%s-%d", architecture, time.Now().Unix())
+
+	// 7. 创建实例
+	params := LaunchInstanceParams{
+		CompartmentId:      compartmentId,
+		AvailabilityDomain: availabilityDomain,
+		DisplayName:        displayName,
+		ImageId:            imageId,
+		Shape:              shape,
+		SubnetId:           subnetId,
+		Ocpus:              float32(ocpus),
+		MemoryInGBs:        float32(memory),
+		SshPublicKey:       sshPublicKey,
+	}
+
+	_, err = s.LaunchInstance(ctx, user, params)
+	if err != nil {
+		return fmt.Errorf("创建实例失败: %w", err)
+	}
+
+	return nil
+}
+
 // GetInstanceDetails 获取实例详细信息包括VNICs
 func (s *OCIService) GetInstanceDetails(ctx context.Context, user *models.OciUser, instanceId string) (*models.InstanceInfo, error) {
 	computeClient, err := s.GetComputeClient(user)
@@ -376,6 +502,68 @@ func (s *OCIService) GetInstanceDetails(ctx context.Context, user *models.OciUse
 	}
 
 	return info, nil
+}
+
+// ImageInfo 镜像信息
+type ImageInfo struct {
+	ID                     string `json:"id"`
+	DisplayName            string `json:"displayName"`
+	OperatingSystem        string `json:"operatingSystem"`
+	OperatingSystemVersion string `json:"operatingSystemVersion"`
+	SizeInMBs              int64  `json:"sizeInMBs"`
+	TimeCreated            string `json:"timeCreated"`
+}
+
+// ListImages 获取可用镜像列表
+func (s *OCIService) ListImages(ctx context.Context, user *models.OciUser, region, architecture string) ([]ImageInfo, error) {
+	// 临时切换用户区域
+	originalRegion := user.OciRegion
+	user.OciRegion = region
+	defer func() { user.OciRegion = originalRegion }()
+
+	computeClient, err := s.GetComputeClient(user)
+	if err != nil {
+		return nil, fmt.Errorf("获取计算客户端失败: %w", err)
+	}
+
+	compartmentId := user.OciTenantID
+
+	// 确定Shape
+	shape := "VM.Standard.A1.Flex"
+	if architecture == "AMD" {
+		shape = "VM.Standard.E2.1.Micro"
+	}
+
+	req := core.ListImagesRequest{
+		CompartmentId: &compartmentId,
+		Shape:         &shape,
+		SortBy:        core.ListImagesSortByTimecreated,
+		SortOrder:     core.ListImagesSortOrderDesc,
+	}
+
+	resp, err := computeClient.ListImages(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("获取镜像列表失败: %w", err)
+	}
+
+	var images []ImageInfo
+	for _, img := range resp.Items {
+		info := ImageInfo{
+			ID:                     *img.Id,
+			DisplayName:            *img.DisplayName,
+			OperatingSystem:        *img.OperatingSystem,
+			OperatingSystemVersion: *img.OperatingSystemVersion,
+		}
+		if img.SizeInMBs != nil {
+			info.SizeInMBs = *img.SizeInMBs
+		}
+		if img.TimeCreated != nil {
+			info.TimeCreated = img.TimeCreated.Format("2006-01-02 15:04:05")
+		}
+		images = append(images, info)
+	}
+
+	return images, nil
 }
 
 // ListBootVolumes 列出引导卷

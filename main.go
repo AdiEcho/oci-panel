@@ -16,11 +16,15 @@ func main() {
 	}
 
 	r := gin.Default()
-	schedulerService := router.Setup(r, cfg)
+	services := router.Setup(r, cfg)
 
 	// 启动定时任务服务
-	schedulerService.Start()
-	defer schedulerService.Stop()
+	services.Scheduler.Start()
+	defer services.Scheduler.Stop()
+
+	// 启动创建实例任务服务
+	services.Task.Start()
+	defer services.Task.Stop()
 
 	log.Printf("Server starting on port %s", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {

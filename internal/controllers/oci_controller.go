@@ -1050,3 +1050,35 @@ func (oc *OciController) DeleteVcn(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "VCN删除成功"))
 }
+
+// ListImagesRequest 获取镜像列表请求
+type ListImagesRequest struct {
+	ConfigID     string `json:"configId" binding:"required"`
+	Region       string `json:"region" binding:"required"`
+	Architecture string `json:"architecture" binding:"required"`
+}
+
+// ListImages 获取可用镜像列表
+func (oc *OciController) ListImages(c *gin.Context) {
+	var req ListImagesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	db := database.GetDB()
+	var user models.OciUser
+	if err := db.Where("id = ?", req.ConfigID).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse(404, "Configuration not found"))
+		return
+	}
+
+	ctx := context.Background()
+	images, err := oc.ociService.ListImages(ctx, &user, req.Region, req.Architecture)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(images, "获取镜像列表成功"))
+}

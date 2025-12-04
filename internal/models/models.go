@@ -179,22 +179,62 @@ func (OciUser) TableName() string {
 }
 
 type OciCreateTask struct {
-	ID              string    `gorm:"primaryKey;column:id" json:"id"`
-	UserID          string    `gorm:"column:user_id" json:"userId"`
-	OciRegion       string    `gorm:"column:oci_region" json:"ociRegion"`
-	Ocpus           float64   `gorm:"column:ocpus;default:1.0" json:"ocpus"`
-	Memory          float64   `gorm:"column:memory;default:6.0" json:"memory"`
-	Disk            int       `gorm:"column:disk;default:50" json:"disk"`
-	Architecture    string    `gorm:"column:architecture;default:ARM" json:"architecture"`
-	Interval        int       `gorm:"column:interval;default:60" json:"interval"`
-	CreateNumbers   int       `gorm:"column:create_numbers;default:1" json:"createNumbers"`
-	SSHKeyID        string    `gorm:"column:ssh_key_id" json:"sshKeyId"`
-	OperationSystem string    `gorm:"column:operation_system;default:Ubuntu" json:"operationSystem"`
-	CreateTime      time.Time `gorm:"column:create_time;autoCreateTime" json:"createTime"`
+	ID              string     `gorm:"primaryKey;column:id" json:"id"`
+	UserID          string     `gorm:"column:user_id" json:"userId"`
+	Username        string     `gorm:"column:username" json:"username"`
+	OciRegion       string     `gorm:"column:oci_region" json:"ociRegion"`
+	Ocpus           float64    `gorm:"column:ocpus;default:1.0" json:"ocpus"`
+	Memory          float64    `gorm:"column:memory;default:6.0" json:"memory"`
+	Disk            int        `gorm:"column:disk;default:50" json:"disk"`
+	Architecture    string     `gorm:"column:architecture;default:ARM" json:"architecture"`
+	Interval        int        `gorm:"column:interval;default:60" json:"interval"`
+	CreateNumbers   int        `gorm:"column:create_numbers;default:1" json:"createNumbers"`
+	SSHKeyID        string     `gorm:"column:ssh_key_id" json:"sshKeyId"`
+	OperationSystem string     `gorm:"column:operation_system;default:Ubuntu" json:"operationSystem"`
+	ImageId         string     `gorm:"column:image_id" json:"imageId"`
+	Status          string     `gorm:"column:status;default:running" json:"status"`
+	ExecuteCount    int        `gorm:"column:execute_count;default:0" json:"executeCount"`
+	SuccessCount    int        `gorm:"column:success_count;default:0" json:"successCount"`
+	LastExecuteTime *time.Time `gorm:"column:last_execute_time" json:"lastExecuteTime"`
+	LastMessage     string     `gorm:"column:last_message;type:text" json:"lastMessage"`
+	CreateTime      time.Time  `gorm:"column:create_time;autoCreateTime" json:"createTime"`
 }
 
 func (OciCreateTask) TableName() string {
 	return "oci_create_task"
+}
+
+// TaskLog 任务执行日志
+type TaskLog struct {
+	ID          string    `gorm:"primaryKey;column:id" json:"id"`
+	TaskID      string    `gorm:"column:task_id;index" json:"taskId"`
+	Status      string    `gorm:"column:status" json:"status"`
+	Message     string    `gorm:"column:message;type:text" json:"message"`
+	ExecuteTime time.Time `gorm:"column:execute_time;autoCreateTime" json:"executeTime"`
+}
+
+func (TaskLog) TableName() string {
+	return "task_log"
+}
+
+// TaskListResponse 任务列表响应
+type TaskListResponse struct {
+	ID              string  `json:"id"`
+	UserID          string  `json:"userId"`
+	Username        string  `json:"username"`
+	OciRegion       string  `json:"ociRegion"`
+	Ocpus           float64 `json:"ocpus"`
+	Memory          float64 `json:"memory"`
+	Disk            int     `json:"disk"`
+	Architecture    string  `json:"architecture"`
+	Interval        int     `json:"interval"`
+	OperationSystem string  `json:"operationSystem"`
+	Status          string  `json:"status"`
+	ExecuteCount    int     `json:"executeCount"`
+	SuccessCount    int     `json:"successCount"`
+	LastExecuteTime string  `json:"lastExecuteTime"`
+	LastMessage     string  `json:"lastMessage"`
+	CreateTime      string  `json:"createTime"`
 }
 
 type OciKv struct {
@@ -321,6 +361,7 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&OciUser{},
 		&OciCreateTask{},
+		&TaskLog{},
 		&OciKv{},
 		&CfCfg{},
 		&IpData{},
