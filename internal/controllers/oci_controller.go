@@ -1056,6 +1056,7 @@ type ListImagesRequest struct {
 	ConfigID     string `json:"configId" binding:"required"`
 	Region       string `json:"region" binding:"required"`
 	Architecture string `json:"architecture" binding:"required"`
+	ClearCache   bool   `json:"clearCache"`
 }
 
 // ListImages 获取可用镜像列表
@@ -1073,12 +1074,43 @@ func (oc *OciController) ListImages(c *gin.Context) {
 		return
 	}
 
+	cacheKey := req.Region + "_" + req.Architecture
+
+	// 尝试从缓存获取
+	if !req.ClearCache {
+		var cache models.OciImageCache
+		if err := db.Where("region = ? AND architecture = ?", req.Region, req.Architecture).First(&cache).Error; err == nil {
+			if cache.ImagesData != "" {
+				var images []services.ImageInfo
+				if json.Unmarshal([]byte(cache.ImagesData), &images) == nil {
+					c.JSON(http.StatusOK, models.SuccessResponse(images, "获取镜像列表成功(缓存)"))
+					return
+				}
+			}
+		}
+	}
+
 	ctx := context.Background()
 	images, err := oc.ociService.ListImages(ctx, &user, req.Region, req.Architecture)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
 		return
 	}
+
+	// 保存到缓存
+	imagesJson, _ := json.Marshal(images)
+	var cache models.OciImageCache
+	result := db.Where("region = ? AND architecture = ?", req.Region, req.Architecture).First(&cache)
+	if result.Error != nil {
+		cache = models.OciImageCache{
+			ID:           cacheKey,
+			Region:       req.Region,
+			Architecture: req.Architecture,
+		}
+	}
+	cache.ImagesData = string(imagesJson)
+	cache.UpdateTime = time.Now()
+	db.Save(&cache)
 
 	c.JSON(http.StatusOK, models.SuccessResponse(images, "获取镜像列表成功"))
 }

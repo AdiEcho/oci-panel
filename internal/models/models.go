@@ -307,6 +307,19 @@ func (OciConfigCache) TableName() string {
 	return "oci_config_cache"
 }
 
+// OciImageCache 镜像缓存表
+type OciImageCache struct {
+	ID           string    `gorm:"primaryKey;column:id" json:"id"`
+	Region       string    `gorm:"column:region;not null" json:"region"`
+	Architecture string    `gorm:"column:architecture;not null" json:"architecture"`
+	ImagesData   string    `gorm:"column:images_data;type:text" json:"imagesData"`
+	UpdateTime   time.Time `gorm:"column:update_time" json:"updateTime"`
+}
+
+func (OciImageCache) TableName() string {
+	return "oci_image_cache"
+}
+
 // SSHKey SSH密钥表
 type SSHKey struct {
 	ID         string    `gorm:"primaryKey;column:id" json:"id"`
@@ -367,6 +380,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&IpData{},
 		&SysSetting{},
 		&OciConfigCache{},
+		&OciImageCache{},
 		&SSHKey{},
 	)
 }
