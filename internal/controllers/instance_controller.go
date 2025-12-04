@@ -187,6 +187,28 @@ func (ic *InstanceController) UpdateBootVolume(c *gin.Context) {
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "引导卷配置更新成功"))
 }
 
+type UpdateBootVolumeByIdRequest struct {
+	UserId       string `json:"userId" binding:"required"`
+	BootVolumeId string `json:"bootVolumeId" binding:"required"`
+	SizeInGBs    int64  `json:"sizeInGBs" binding:"required,gt=0"`
+	VpusPerGB    int64  `json:"vpusPerGB" binding:"required,gt=0"`
+}
+
+func (ic *InstanceController) UpdateBootVolumeById(c *gin.Context) {
+	var req UpdateBootVolumeByIdRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	if err := ic.instanceService.UpdateBootVolumeById(req.UserId, req.BootVolumeId, req.SizeInGBs, req.VpusPerGB); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, "引导卷配置更新成功"))
+}
+
 type CreateCloudShellRequest struct {
 	UserId     string `json:"userId" binding:"required"`
 	InstanceId string `json:"instanceId" binding:"required"`

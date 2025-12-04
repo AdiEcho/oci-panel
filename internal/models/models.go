@@ -23,6 +23,7 @@ type OciUserListResponse struct {
 	ID               string `json:"id"`
 	Username         string `json:"username"`
 	TenantName       string `json:"tenantName"`
+	TenantCreateTime string `json:"tenantCreateTime"`
 	OciTenantID      string `json:"ociTenantId"`
 	OciRegion        string `json:"ociRegion"`
 	CreateTime       string `json:"createTime"`

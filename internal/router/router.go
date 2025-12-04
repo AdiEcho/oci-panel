@@ -89,6 +89,11 @@ func Setup(r *gin.Engine, cfg *config.Config) *services.SchedulerService {
 			instance.POST("/disable500Mbps", instanceCtrl.Disable500Mbps)
 		}
 
+		bootVolume := api.Group("/bootVolume")
+		{
+			bootVolume.POST("/update", instanceCtrl.UpdateBootVolumeById)
+		}
+
 		ipCtrl := controllers.NewIpController(ipService)
 		ip := api.Group("/ip")
 		{

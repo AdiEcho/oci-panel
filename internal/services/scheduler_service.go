@@ -197,6 +197,19 @@ func (s *SchedulerService) UpdateConfigCache(configID string) error {
 		if data, err := json.Marshal(tenantInfo); err == nil {
 			cache.TenantData = string(data)
 		}
+		// 同步更新 OciUser 表中的租户名称和创建时间
+		updateFields := map[string]interface{}{}
+		if tenantInfo.Name != "" && tenantInfo.Name != user.TenantName {
+			updateFields["tenant_name"] = tenantInfo.Name
+		}
+		if tenantInfo.CreateTime != "" && user.TenantCreateTime == nil {
+			if parsedTime, err := time.Parse("2006-01-02 15:04:05", tenantInfo.CreateTime); err == nil {
+				updateFields["tenant_create_time"] = parsedTime
+			}
+		}
+		if len(updateFields) > 0 {
+			db.Model(&user).Updates(updateFields)
+		}
 	}
 
 	cache.UpdateTime = time.Now()

@@ -776,6 +776,13 @@ func (s *OCIService) GetTenantInfo(ctx context.Context, user *models.OciUser) (*
 		tenantInfo.PasswordExpiresAfter = passwordExpiresAfter
 	}
 
+	// 获取租户创建时间（通过compartment的创建时间）
+	compartmentReq := identity.GetCompartmentRequest{CompartmentId: &user.OciTenantID}
+	compartmentResp, err := identityClient.GetCompartment(ctx, compartmentReq)
+	if err == nil && compartmentResp.TimeCreated != nil {
+		tenantInfo.CreateTime = compartmentResp.TimeCreated.Format("2006-01-02 15:04:05")
+	}
+
 	return tenantInfo, nil
 }
 

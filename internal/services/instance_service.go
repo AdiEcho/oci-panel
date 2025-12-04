@@ -138,7 +138,7 @@ func (s *InstanceService) UpdateInstanceConfig(userId string, instanceId string,
 	return s.ociService.UpdateInstanceShape(context.Background(), &user, instanceId, ocpus, memoryInGBs)
 }
 
-// UpdateBootVolumeConfig 更新引导卷配置
+// UpdateBootVolumeConfig 更新引导卷配置（通过实例ID）
 func (s *InstanceService) UpdateBootVolumeConfig(userId string, instanceId string, sizeInGBs int64, vpusPerGB int64) error {
 	var user models.OciUser
 	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
@@ -174,6 +174,17 @@ func (s *InstanceService) UpdateBootVolumeConfig(userId string, instanceId strin
 	}
 
 	bootVolumeId := *attachResp.Items[0].BootVolumeId
+	return s.ociService.UpdateBootVolume(ctx, &user, bootVolumeId, sizeInGBs, vpusPerGB)
+}
+
+// UpdateBootVolumeById 直接通过引导卷ID更新配置
+func (s *InstanceService) UpdateBootVolumeById(userId string, bootVolumeId string, sizeInGBs int64, vpusPerGB int64) error {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	ctx := context.Background()
 	return s.ociService.UpdateBootVolume(ctx, &user, bootVolumeId, sizeInGBs, vpusPerGB)
 }
 

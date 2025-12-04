@@ -68,10 +68,15 @@ func (oc *OciController) UserPage(c *gin.Context) {
 	if cacheEnabled {
 		// 从数据库缓存读取
 		for i, user := range users {
+			tenantCreateTime := ""
+			if user.TenantCreateTime != nil {
+				tenantCreateTime = user.TenantCreateTime.Format("2006-01-02 15:04:05")
+			}
 			responseList[i] = models.OciUserListResponse{
 				ID:               user.ID,
 				Username:         user.Username,
 				TenantName:       user.TenantName,
+				TenantCreateTime: tenantCreateTime,
 				OciTenantID:      user.OciTenantID,
 				OciRegion:        user.OciRegion,
 				CreateTime:       user.CreateTime.Format("2006-01-02 15:04:05"),
@@ -112,10 +117,15 @@ func (oc *OciController) UserPage(c *gin.Context) {
 		}
 
 		for i, user := range users {
+			tenantCreateTime := ""
+			if user.TenantCreateTime != nil {
+				tenantCreateTime = user.TenantCreateTime.Format("2006-01-02 15:04:05")
+			}
 			responseList[i] = models.OciUserListResponse{
 				ID:               user.ID,
 				Username:         user.Username,
 				TenantName:       user.TenantName,
+				TenantCreateTime: tenantCreateTime,
 				OciTenantID:      user.OciTenantID,
 				OciRegion:        user.OciRegion,
 				CreateTime:       user.CreateTime.Format("2006-01-02 15:04:05"),
@@ -166,6 +176,20 @@ func (oc *OciController) AddCfg(c *gin.Context) {
 		OciRegion:      req.OciRegion,
 		OciKeyPath:     req.OciKeyPath,
 		CreateTime:     time.Now(),
+	}
+
+	// 获取真正的租户名称和创建时间
+	ctx := context.Background()
+	tenantInfo, err := oc.ociService.GetTenantInfo(ctx, &user)
+	if err == nil && tenantInfo != nil {
+		if tenantInfo.Name != "" {
+			user.TenantName = tenantInfo.Name
+		}
+		if tenantInfo.CreateTime != "" {
+			if parsedTime, err := time.Parse("2006-01-02 15:04:05", tenantInfo.CreateTime); err == nil {
+				user.TenantCreateTime = &parsedTime
+			}
+		}
 	}
 
 	if err := database.GetDB().Create(&user).Error; err != nil {

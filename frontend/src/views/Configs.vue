@@ -29,16 +29,15 @@
             <tr>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">配置名</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">租户名称</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">租户ID</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">租户创建时间</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">区域</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">实例数</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">创建时间</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-slate-300 uppercase">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700">
             <tr v-if="loading">
-              <td colspan="7" class="px-6 py-8 text-center text-slate-400">
+              <td colspan="6" class="px-6 py-8 text-center text-slate-400">
                 <svg class="animate-spin h-8 w-8 mx-auto" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path
@@ -50,16 +49,12 @@
               </td>
             </tr>
             <tr v-else-if="!configs.length">
-              <td colspan="7" class="px-6 py-8 text-center text-slate-400">暂无配置</td>
+              <td colspan="6" class="px-6 py-8 text-center text-slate-400">暂无配置</td>
             </tr>
             <tr v-for="config in configs" v-else :key="config.id" class="hover:bg-slate-700/30">
               <td class="px-6 py-4 font-medium">{{ config.username }}</td>
               <td class="px-6 py-4">{{ config.tenantName || '-' }}</td>
-              <td class="px-6 py-4">
-                <span class="inline-block max-w-xs truncate" :title="config.ociTenantId">
-                  {{ config.tenantName || config.ociTenantId?.substring(0, 25) + '...' }}
-                </span>
-              </td>
+              <td class="px-6 py-4 text-sm text-slate-400">{{ config.tenantCreateTime || '-' }}</td>
               <td class="px-6 py-4">
                 <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300">
                   {{ config.ociRegion }}
@@ -73,7 +68,6 @@
                   </span>
                 </div>
               </td>
-              <td class="px-6 py-4 text-sm text-slate-400">{{ config.createTime }}</td>
               <td class="px-6 py-4">
                 <div class="flex gap-2">
                   <button class="btn btn-primary text-sm" title="配置详情" @click="viewConfigDetails(config)">
@@ -798,43 +792,66 @@
                 </svg>
                 <p class="text-slate-400">暂无引导卷</p>
               </div>
-              <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div v-else class="space-y-3">
                 <div
                   v-for="volume in tabVolumes"
                   :key="volume.id"
                   class="border border-slate-600 rounded-lg p-4 hover:border-blue-500/50 transition-all"
                 >
-                  <div class="flex justify-between items-start mb-2">
-                    <h5 class="font-semibold text-white">{{ volume.displayName }}</h5>
-                    <div class="flex gap-2">
-                      <span v-if="volume.attached" class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">已附加</span>
-                      <span v-else class="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300">未附加</span>
+                  <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h5 class="font-semibold text-white">{{ volume.displayName }}</h5>
+                        <p class="text-xs text-slate-400">{{ volume.id?.substring(0, 30) }}...</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span v-if="volume.attached" class="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300">已附加</span>
+                      <span v-else class="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">未附加</span>
                       <span
-                        class="text-xs px-1.5 py-0.5 rounded"
+                        class="text-xs px-2 py-1 rounded"
                         :class="{
                           'bg-green-500/20 text-green-300': volume.state === 'AVAILABLE',
                           'bg-yellow-500/20 text-yellow-300': volume.state === 'PROVISIONING',
                           'bg-red-500/20 text-red-300': volume.state === 'FAULTY'
                         }"
                       >{{ volume.state }}</span>
+                      <button 
+                        class="btn btn-primary btn-sm" 
+                        title="编辑引导卷"
+                        @click="openVolumeEditDialog(volume)"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                  <div class="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span class="text-slate-400">大小:</span><span class="ml-2 text-white">{{ volume.sizeInGBs }} GB</span>
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="bg-slate-700/30 rounded-lg p-3">
+                      <span class="text-slate-400 text-xs block mb-1">磁盘大小</span>
+                      <span class="text-white font-semibold">{{ volume.sizeInGBs }} GB</span>
                     </div>
-                    <div>
-                      <span class="text-slate-400">性能:</span><span class="ml-2 text-white">{{ volume.vpusPerGB || 10 }} VPU/GB</span>
+                    <div class="bg-slate-700/30 rounded-lg p-3">
+                      <span class="text-slate-400 text-xs block mb-1">性能 (VPU/GB)</span>
+                      <span class="text-white font-semibold">{{ volume.vpusPerGB || 10 }}</span>
                     </div>
-                    <div v-if="volume.instanceName" class="col-span-2">
-                      <span class="text-slate-400">附加实例:</span><span class="ml-2 text-blue-300">{{ volume.instanceName }}</span>
+                    <div v-if="volume.instanceName" class="bg-slate-700/30 rounded-lg p-3">
+                      <span class="text-slate-400 text-xs block mb-1">附加实例</span>
+                      <span class="text-blue-300 font-semibold">{{ volume.instanceName }}</span>
                     </div>
-                    <div v-if="volume.availabilityDomain" class="col-span-2">
-                      <span class="text-slate-400">可用域:</span><span class="ml-2 text-white text-xs">{{ volume.availabilityDomain }}</span>
+                    <div class="bg-slate-700/30 rounded-lg p-3">
+                      <span class="text-slate-400 text-xs block mb-1">可用域</span>
+                      <span class="text-white text-xs">{{ volume.availabilityDomain?.split(':').pop() || '-' }}</span>
                     </div>
-                    <div v-if="volume.createTime" class="col-span-2">
-                      <span class="text-slate-400">创建时间:</span><span class="ml-2 text-white text-xs">{{ volume.createTime }}</span>
-                    </div>
+                  </div>
+                  <div v-if="volume.createTime" class="mt-3 text-xs text-slate-400">
+                    创建时间: {{ volume.createTime }}
                   </div>
                 </div>
               </div>
@@ -1446,6 +1463,105 @@
         </div>
       </div>
     </div>
+
+    <!-- 引导卷编辑弹窗 -->
+    <div
+      v-if="volumeEditDialogVisible"
+      class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
+      <div class="card max-w-lg w-full">
+        <div class="p-6 border-b border-slate-700 flex justify-between items-center">
+          <h3 class="text-xl font-bold">编辑引导卷</h3>
+          <button class="text-slate-400 hover:text-white" @click="volumeEditDialogVisible = false">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4">
+          <!-- 引导卷信息 -->
+          <div class="bg-slate-700/30 rounded-lg p-4">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                </svg>
+              </div>
+              <div>
+                <h5 class="font-semibold text-white">{{ volumeEditForm.displayName }}</h5>
+                <p class="text-xs text-slate-400">{{ volumeEditForm.volumeId?.substring(0, 40) }}...</p>
+              </div>
+            </div>
+            <div v-if="volumeEditForm.instanceName" class="text-sm">
+              <span class="text-slate-400">附加实例:</span>
+              <span class="ml-2 text-blue-300">{{ volumeEditForm.instanceName }}</span>
+            </div>
+          </div>
+
+          <!-- 磁盘大小 -->
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">磁盘大小 (GB)</label>
+            <div class="flex items-center gap-3">
+              <input 
+                v-model.number="volumeEditForm.sizeInGBs" 
+                type="number" 
+                min="50" 
+                max="32768" 
+                class="input flex-1" 
+                placeholder="输入磁盘大小"
+              />
+              <span class="text-slate-400 text-sm">当前: {{ volumeEditForm.originalSize }} GB</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">最小 50GB，最大 32768GB。只能增大，不能缩小。</p>
+          </div>
+
+          <!-- VPU性能 -->
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">性能 (VPU/GB)</label>
+            <select v-model.number="volumeEditForm.vpusPerGB" class="input">
+              <option :value="10">10 VPU/GB - 平衡性能</option>
+              <option :value="20">20 VPU/GB - 高性能</option>
+              <option :value="30">30 VPU/GB - 更高性能</option>
+              <option :value="40">40 VPU/GB - 高级性能</option>
+              <option :value="50">50 VPU/GB - 极高性能</option>
+              <option :value="60">60 VPU/GB - 超高性能</option>
+              <option :value="70">70 VPU/GB - 顶级性能</option>
+              <option :value="80">80 VPU/GB - 旗舰性能</option>
+              <option :value="90">90 VPU/GB - 极致性能</option>
+              <option :value="100">100 VPU/GB - 最高性能</option>
+              <option :value="110">110 VPU/GB - 超旗舰</option>
+              <option :value="120">120 VPU/GB - 极限性能</option>
+            </select>
+            <p class="text-xs text-slate-400 mt-1">VPU 越高，IOPS 和吞吐量越高。当前: {{ volumeEditForm.originalVpu }} VPU/GB</p>
+          </div>
+
+          <!-- 警告提示 -->
+          <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+            <p class="text-xs text-yellow-300">
+              <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              修改引导卷配置可能需要重启实例才能生效。磁盘大小只能增大，不能缩小。
+            </p>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="flex gap-3 pt-2">
+            <button type="button" class="btn btn-secondary flex-1" @click="volumeEditDialogVisible = false">
+              取消
+            </button>
+            <button 
+              class="btn btn-primary flex-1" 
+              :disabled="volumeUpdating"
+              @click="updateVolumeConfig"
+            >
+              {{ volumeUpdating ? '更新中...' : '保存修改' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1469,6 +1585,7 @@ const showConfigDetailsSidebar = ref(false)
 const showEditUserModal = ref(false)
 const editConfigDialogVisible = ref(false)
 const cloudShellDialogVisible = ref(false)
+const volumeEditDialogVisible = ref(false)
 
 // 编辑状态
 const editingConfig = ref(null)
@@ -1484,6 +1601,7 @@ const loadingTab = ref(false)
 const loadingTraffic = ref(false)
 const configUpdating = ref(false)
 const cloudShellCreating = ref(false)
+const volumeUpdating = ref(false)
 const instanceActionLoading = reactive({})
 
 // 标签页状态
@@ -1547,6 +1665,17 @@ const editConfigForm = reactive({
 
 const cloudShellForm = reactive({ instanceId: '', publicKey: '' })
 const cloudShellResult = reactive({ connectionId: '', connectionString: '' })
+
+const volumeEditForm = reactive({
+  volumeId: '',
+  displayName: '',
+  instanceId: '',
+  instanceName: '',
+  sizeInGBs: 50,
+  vpusPerGB: 10,
+  originalSize: 50,
+  originalVpu: 10
+})
 
 // 工具函数
 const parseConfigContent = (content) => {
@@ -2269,6 +2398,52 @@ const disable500Mbps = async () => {
     toast.error(error.message || '500Mbps关闭失败')
   } finally {
     configUpdating.value = false
+  }
+}
+
+// 引导卷编辑
+const openVolumeEditDialog = (volume) => {
+  volumeEditForm.volumeId = volume.id
+  volumeEditForm.displayName = volume.displayName
+  volumeEditForm.instanceId = volume.instanceId || ''
+  volumeEditForm.instanceName = volume.instanceName || ''
+  volumeEditForm.sizeInGBs = volume.sizeInGBs || 50
+  volumeEditForm.vpusPerGB = volume.vpusPerGB || 10
+  volumeEditForm.originalSize = volume.sizeInGBs || 50
+  volumeEditForm.originalVpu = volume.vpusPerGB || 10
+  volumeEditDialogVisible.value = true
+}
+
+const updateVolumeConfig = async () => {
+  if (!volumeEditForm.volumeId) {
+    toast.warning('缺少引导卷ID')
+    return
+  }
+  if (volumeEditForm.sizeInGBs < volumeEditForm.originalSize) {
+    toast.warning('磁盘大小只能增大，不能缩小')
+    return
+  }
+  if (!confirm('确定要修改引导卷配置吗？修改可能需要重启实例才能生效。')) return
+  volumeUpdating.value = true
+  try {
+    const response = await api.post('/bootVolume/update', {
+      userId: configDetails.value.userId,
+      bootVolumeId: volumeEditForm.volumeId,
+      sizeInGBs: volumeEditForm.sizeInGBs,
+      vpusPerGB: volumeEditForm.vpusPerGB
+    })
+    if (response.data && response.data.code === 200) {
+      toast.success('引导卷配置更新成功')
+      volumeEditDialogVisible.value = false
+      // 刷新引导卷列表
+      loadTabData('volumes')
+    } else {
+      toast.error(response.data?.msg || '引导卷配置更新失败')
+    }
+  } catch (error) {
+    toast.error(error.message || '引导卷配置更新失败')
+  } finally {
+    volumeUpdating.value = false
   }
 }
 
