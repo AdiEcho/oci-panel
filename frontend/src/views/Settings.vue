@@ -9,7 +9,6 @@ import {
   Server,
   Code,
   Loader2,
-  Sparkles,
   FolderOpen,
   Activity
 } from 'lucide-vue-next'
@@ -26,8 +25,7 @@ const refreshing = ref(false)
 
 const config = ref({
   keyDirPath: '',
-  logLevel: '',
-  aiEnabled: false
+  logLevel: ''
 })
 
 const cacheConfig = ref({
@@ -221,13 +219,6 @@ const systemInfo = [
             <div class="flex items-center justify-between px-6 py-4">
               <span class="text-muted-foreground">日志级别</span>
               <span class="font-medium">{{ config.logLevel || 'N/A' }}</span>
-            </div>
-            <div class="flex items-center justify-between px-6 py-4">
-              <span class="text-muted-foreground">AI功能</span>
-              <Badge :variant="config.aiEnabled ? 'success' : 'secondary'">
-                <Sparkles class="w-3 h-3 mr-1" />
-                {{ config.aiEnabled ? '已启用' : '未启用' }}
-              </Badge>
             </div>
           </template>
         </CardContent>

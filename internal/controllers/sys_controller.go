@@ -80,7 +80,6 @@ func (sc *SysController) GetGlance(c *gin.Context) {
 
 type SysCfgResponse struct {
 	LogLevel      string `json:"logLevel"`
-	AIEnabled     bool   `json:"aiEnabled"`
 	CacheEnabled  bool   `json:"cacheEnabled"`
 	CacheInterval int    `json:"cacheInterval"`
 }
@@ -88,7 +87,6 @@ type SysCfgResponse struct {
 func (sc *SysController) GetSysCfg(c *gin.Context) {
 	c.JSON(http.StatusOK, models.SuccessResponse(SysCfgResponse{
 		LogLevel:      sc.cfg.Logging.Level,
-		AIEnabled:     sc.cfg.AI.APIKey != "",
 		CacheEnabled:  sc.schedulerService.IsCacheEnabled(),
 		CacheInterval: sc.schedulerService.GetCacheInterval(),
 	}, "success"))

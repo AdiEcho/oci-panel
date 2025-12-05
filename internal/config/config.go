@@ -20,11 +20,6 @@ type Config struct {
 	Logging struct {
 		Level string `toml:"level"`
 	} `toml:"logging"`
-	AI struct {
-		APIKey  string `toml:"api_key"`
-		BaseURL string `toml:"base_url"`
-		Model   string `toml:"model"`
-	} `toml:"ai"`
 }
 
 func Load() *Config {
