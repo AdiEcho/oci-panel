@@ -91,6 +91,18 @@ interface Image {
   operatingSystem: string
   operatingSystemVersion: string
 }
+interface Preset {
+  id: string
+  name: string
+  ocpus: number
+  memory: number
+  disk: number
+  bootVolumeVpu: number
+  architecture: string
+  operationSystem: string
+  imageId: string
+  sshKeyId: string
+}
 
 // 配置列表状态
 const configs = ref<Config[]>([])
@@ -179,6 +191,8 @@ const instanceForm = ref({
 const sshKeys = ref<SSHKey[]>([])
 const availableImages = ref<Image[]>([])
 const filteredImages = ref<Image[]>([])
+const presets = ref<Preset[]>([])
+const selectedPresetId = ref('')
 
 // 计算属性
 const isAllSelected = computed(
@@ -236,6 +250,38 @@ const loadSSHKeys = async () => {
     sshKeys.value = response.data || []
   } catch {
     sshKeys.value = []
+  }
+}
+
+const loadPresets = async () => {
+  try {
+    const response = await api.get('/preset/list')
+    presets.value = response.data || []
+  } catch {
+    presets.value = []
+  }
+}
+
+const applyPreset = (presetId: string) => {
+  if (!presetId) return
+  const preset = presets.value.find(p => p.id === presetId)
+  if (preset) {
+    instanceForm.value.ocpus = preset.ocpus
+    instanceForm.value.memory = preset.memory
+    instanceForm.value.disk = preset.disk
+    instanceForm.value.bootVolumeVpu = preset.bootVolumeVpu
+    instanceForm.value.architecture = preset.architecture
+    instanceForm.value.operationSystem = preset.operationSystem
+    if (preset.imageId) {
+      instanceForm.value.imageId = preset.imageId
+    }
+    if (preset.sshKeyId) {
+      instanceForm.value.sshKeyId = preset.sshKeyId
+    }
+    if (selectedConfigForInstance.value) {
+      loadImages(selectedConfigForInstance.value.id, instanceForm.value.ociRegion, preset.architecture)
+    }
+    toast.success(`已应用预设: ${preset.name}`)
   }
 }
 
@@ -373,7 +419,8 @@ const batchDeleteConfigs = async () => {
 const createInstance = async (config: Config) => {
   selectedConfigForInstance.value = config
   instanceForm.value.ociRegion = config.ociRegion
-  await loadSSHKeys()
+  selectedPresetId.value = ''
+  await Promise.all([loadSSHKeys(), loadPresets()])
   await loadImages(config.id, config.ociRegion, instanceForm.value.architecture)
   showCreateInstanceModal.value = true
 }
@@ -427,7 +474,8 @@ const batchCreateInstance = async () => {
     toast.warning('请先选择配置')
     return
   }
-  await loadSSHKeys()
+  selectedPresetId.value = ''
+  await Promise.all([loadSSHKeys(), loadPresets()])
   showBatchCreateModal.value = true
 }
 const closeBatchCreateModal = () => {
@@ -1014,6 +1062,24 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
         </DialogDescription>
       </DialogHeader>
       <form class="space-y-4" @submit.prevent="submitInstanceTask">
+        <div v-if="presets.length > 0">
+          <label class="block text-sm font-medium mb-2">选择预设</label>
+          <select
+            v-model="selectedPresetId"
+            class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+            @change="applyPreset(selectedPresetId)"
+          >
+            <option value="">手动填写配置</option>
+            <option v-for="preset in presets" :key="preset.id" :value="preset.id">
+              {{ preset.name }} ({{ preset.ocpus }}核 {{ preset.memory }}GB {{ preset.architecture }})
+            </option>
+          </select>
+          <p class="text-xs text-muted-foreground mt-1">
+            选择预设后自动填充配置，或在
+            <RouterLink to="/presets" class="text-primary hover:underline">预设配置</RouterLink>
+            中管理
+          </p>
+        </div>
         <div>
           <label class="block text-sm font-medium mb-2">区域</label>
           <Input v-model="instanceForm.ociRegion" placeholder="例: ap-singapore-1" required />
@@ -1131,6 +1197,19 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
         </DialogDescription>
       </DialogHeader>
       <form class="space-y-4" @submit.prevent="submitBatchInstanceTask">
+        <div v-if="presets.length > 0">
+          <label class="block text-sm font-medium mb-2">选择预设</label>
+          <select
+            v-model="selectedPresetId"
+            class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+            @change="applyPreset(selectedPresetId)"
+          >
+            <option value="">手动填写配置</option>
+            <option v-for="preset in presets" :key="preset.id" :value="preset.id">
+              {{ preset.name }} ({{ preset.ocpus }}核 {{ preset.memory }}GB {{ preset.architecture }})
+            </option>
+          </select>
+        </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium mb-2">CPU核心数</label>

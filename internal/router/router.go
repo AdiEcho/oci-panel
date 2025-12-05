@@ -135,6 +135,16 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			task.POST("/logs", taskCtrl.TaskLogs)
 			task.POST("/clearLogs", taskCtrl.ClearTaskLogs)
 		}
+
+		presetCtrl := controllers.NewPresetController()
+		preset := api.Group("/preset")
+		{
+			preset.POST("/create", presetCtrl.CreatePreset)
+			preset.POST("/update", presetCtrl.UpdatePreset)
+			preset.POST("/delete", presetCtrl.DeletePreset)
+			preset.GET("/list", presetCtrl.ListPresets)
+			preset.GET("/detail", presetCtrl.GetPreset)
+		}
 	}
 
 	// SPA fallback - 所有未匹配的路由都返回 index.html，让前端路由接管

@@ -347,6 +347,43 @@ type SSHKeyResponse struct {
 	CreateTime string `json:"createTime"`
 }
 
+// InstancePreset 实例预设配置
+type InstancePreset struct {
+	ID              string    `gorm:"primaryKey;column:id" json:"id"`
+	Name            string    `gorm:"column:name;not null" json:"name"`
+	Ocpus           float64   `gorm:"column:ocpus;default:1.0" json:"ocpus"`
+	Memory          float64   `gorm:"column:memory;default:6.0" json:"memory"`
+	Disk            int       `gorm:"column:disk;default:50" json:"disk"`
+	BootVolumeVpu   int64     `gorm:"column:boot_volume_vpu;default:10" json:"bootVolumeVpu"`
+	Architecture    string    `gorm:"column:architecture;default:ARM" json:"architecture"`
+	OperationSystem string    `gorm:"column:operation_system;default:Ubuntu" json:"operationSystem"`
+	ImageID         string    `gorm:"column:image_id" json:"imageId"`
+	SSHKeyID        string    `gorm:"column:ssh_key_id" json:"sshKeyId"`
+	Description     string    `gorm:"column:description;type:text" json:"description"`
+	CreateTime      time.Time `gorm:"column:create_time;autoCreateTime" json:"createTime"`
+}
+
+func (InstancePreset) TableName() string {
+	return "instance_preset"
+}
+
+// InstancePresetResponse 实例预设配置响应
+type InstancePresetResponse struct {
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	Ocpus           float64 `json:"ocpus"`
+	Memory          float64 `json:"memory"`
+	Disk            int     `json:"disk"`
+	BootVolumeVpu   int64   `json:"bootVolumeVpu"`
+	Architecture    string  `json:"architecture"`
+	OperationSystem string  `json:"operationSystem"`
+	ImageID         string  `json:"imageId"`
+	SSHKeyID        string  `json:"sshKeyId"`
+	SSHKeyName      string  `json:"sshKeyName"`
+	Description     string  `json:"description"`
+	CreateTime      string  `json:"createTime"`
+}
+
 type ResponseData struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
@@ -383,5 +420,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&OciConfigCache{},
 		&OciImageCache{},
 		&SSHKey{},
+		&InstancePreset{},
 	)
 }

@@ -34,6 +34,11 @@ const routes = [
         component: () => import('@/views/Keys.vue')
       },
       {
+        path: 'presets',
+        name: 'Presets',
+        component: () => import('@/views/Presets.vue')
+      },
+      {
         path: 'logs',
         name: 'Logs',
         component: () => import('@/views/Logs.vue')
