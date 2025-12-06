@@ -9,10 +9,8 @@ RUN npm run build
 # Stage 2: Build backend
 FROM golang:1.24-alpine AS backend-builder
 WORKDIR /app
-COPY go.mod ./
-RUN go mod tidy
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o oci-panel main.go
+RUN go mod tidy && CGO_ENABLED=0 go build -ldflags "-s -w" -o oci-panel main.go
 
 # Stage 3: Final minimal image
 FROM alpine:3.21
