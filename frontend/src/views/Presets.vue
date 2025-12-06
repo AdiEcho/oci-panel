@@ -2,18 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useMotion } from '@vueuse/motion'
 import { RouterLink } from 'vue-router'
-import {
-  Plus,
-  Trash2,
-  Edit,
-  Loader2,
-  Package,
-  Cpu,
-  HardDrive,
-  MemoryStick,
-  Key,
-  MoreHorizontal
-} from 'lucide-vue-next'
+import { Plus, Trash2, Edit, Loader2, Package, Cpu, HardDrive, MemoryStick, Key, MoreHorizontal } from 'lucide-vue-next'
 import api from '@/lib/api'
 import { toast } from '@/composables/useToast'
 import { Card, CardContent } from '@/components/ui/card'
@@ -326,14 +315,20 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">架构</label>
-            <select v-model="form.architecture" class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+            <select
+              v-model="form.architecture"
+              class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+            >
               <option value="ARM">ARM</option>
               <option value="AMD">AMD</option>
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">操作系统</label>
-            <select v-model="form.operationSystem" class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+            <select
+              v-model="form.operationSystem"
+              class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+            >
               <option value="Ubuntu">Ubuntu</option>
               <option value="CentOS">CentOS</option>
               <option value="Oracle Linux">Oracle Linux</option>

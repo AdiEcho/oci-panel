@@ -15,10 +15,10 @@ const updatePosition = () => {
   if (!triggerRef.value) return
   const rect = triggerRef.value.getBoundingClientRect()
   const menuWidth = 192
-  
+
   let left = props.align === 'left' ? rect.left : rect.right - menuWidth
   left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8))
-  
+
   menuStyle.value = {
     top: `${rect.bottom + 8}px`,
     left: `${left}px`
@@ -38,8 +38,7 @@ const close = () => {
 
 const handleClickOutside = (event: MouseEvent) => {
   const target = event.target as Node
-  if (dropdownRef.value && !dropdownRef.value.contains(target) && 
-      menuRef.value && !menuRef.value.contains(target)) {
+  if (dropdownRef.value && !dropdownRef.value.contains(target) && menuRef.value && !menuRef.value.contains(target)) {
     close()
   }
 }

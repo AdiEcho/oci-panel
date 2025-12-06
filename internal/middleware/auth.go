@@ -21,7 +21,7 @@ func GenerateToken(username string) (string, error) {
 	claims := Claims{
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(12 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -58,7 +58,9 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// API请求中不需要认证的路径
 		if path == "/api/sys/login" ||
-			path == "/api/sys/checkMfaCode" {
+			path == "/api/sys/checkMfaCode" ||
+			path == "/api/passkey/beginLogin" ||
+			path == "/api/passkey/finishLogin" {
 			c.Next()
 			return
 		}

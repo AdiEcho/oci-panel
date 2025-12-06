@@ -14,7 +14,13 @@ import {
   Send,
   Play,
   Square,
-  TestTube
+  TestTube,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  Fingerprint,
+  KeyRound,
+  Trash2
 } from 'lucide-vue-next'
 import api from '@/lib/api'
 import { toast } from '@/composables/useToast'
@@ -47,6 +53,22 @@ const telegramConfig = ref({
 const telegramLoading = ref(false)
 const testingConnection = ref(false)
 const sendingTestMessage = ref(false)
+
+const mfaConfig = ref({
+  enabled: false,
+  secret: '',
+  qrCode: ''
+})
+const mfaLoading = ref(false)
+const mfaCode = ref('')
+const showMfaSetup = ref(false)
+const enablingMfa = ref(false)
+
+const passkeyConfig = ref({
+  enabled: false
+})
+const passkeyLoading = ref(false)
+const registeringPasskey = ref(false)
 
 const loadConfig = async () => {
   loading.value = true
@@ -160,9 +182,166 @@ const stopTelegramBot = async () => {
   }
 }
 
+const loadAuthStatus = async () => {
+  mfaLoading.value = true
+  passkeyLoading.value = true
+  try {
+    const response = await api.post('/sys/getAuthStatus', {})
+    if (response.data) {
+      mfaConfig.value.enabled = response.data.mfaEnabled
+      passkeyConfig.value.enabled = response.data.passkeyEnabled
+    }
+  } catch {
+    toast.error('加载认证状态失败')
+  } finally {
+    mfaLoading.value = false
+    passkeyLoading.value = false
+  }
+}
+
+const toggleMfaSetup = async () => {
+  if (mfaConfig.value.enabled) {
+    try {
+      await api.post('/sys/disableMfa', {})
+      mfaConfig.value.enabled = false
+      mfaConfig.value.secret = ''
+      mfaConfig.value.qrCode = ''
+      showMfaSetup.value = false
+      toast.success('MFA 已禁用')
+    } catch {
+      toast.error('禁用 MFA 失败')
+    }
+  } else {
+    if (passkeyConfig.value.enabled) {
+      toast.error('请先禁用 Passkey 后再启用 MFA')
+      return
+    }
+    showMfaSetup.value = true
+    try {
+      const response = await api.post('/sys/generateMfaSecret', {})
+      if (response.data) {
+        mfaConfig.value.secret = response.data.secret
+        mfaConfig.value.qrCode = response.data.qrCode
+      }
+    } catch {
+      toast.error('生成 MFA 密钥失败')
+      showMfaSetup.value = false
+    }
+  }
+}
+
+const cancelMfaSetup = () => {
+  showMfaSetup.value = false
+  mfaConfig.value.secret = ''
+  mfaConfig.value.qrCode = ''
+  mfaCode.value = ''
+}
+
+const enableMfa = async () => {
+  if (!mfaCode.value || mfaCode.value.length !== 6) {
+    toast.error('请输入6位验证码')
+    return
+  }
+  enablingMfa.value = true
+  try {
+    await api.post('/sys/enableMfa', {
+      secret: mfaConfig.value.secret,
+      code: mfaCode.value
+    })
+    mfaConfig.value.enabled = true
+    showMfaSetup.value = false
+    mfaCode.value = ''
+    toast.success('MFA 已启用')
+  } catch {
+    toast.error('验证码错误，请重试')
+  } finally {
+    enablingMfa.value = false
+  }
+}
+
+const registerPasskey = async () => {
+  if (mfaConfig.value.enabled) {
+    toast.error('请先禁用 MFA 后再启用 Passkey')
+    return
+  }
+  registeringPasskey.value = true
+  try {
+    const beginResponse = await api.post('/passkey/beginRegistration', {})
+    const options = beginResponse.data
+
+    const credential = (await navigator.credentials.create({
+      publicKey: {
+        ...options.publicKey,
+        challenge: base64ToArrayBuffer(options.publicKey.challenge),
+        user: {
+          ...options.publicKey.user,
+          id: base64ToArrayBuffer(options.publicKey.user.id)
+        },
+        excludeCredentials:
+          options.publicKey.excludeCredentials?.map((c: any) => ({
+            ...c,
+            id: base64ToArrayBuffer(c.id)
+          })) || []
+      }
+    })) as PublicKeyCredential
+
+    const attestationResponse = credential.response as AuthenticatorAttestationResponse
+    const credentialData = {
+      id: credential.id,
+      rawId: arrayBufferToBase64(credential.rawId),
+      type: credential.type,
+      response: {
+        clientDataJSON: arrayBufferToBase64(attestationResponse.clientDataJSON),
+        attestationObject: arrayBufferToBase64(attestationResponse.attestationObject)
+      }
+    }
+
+    await api.post('/passkey/finishRegistration', { credential: credentialData })
+    passkeyConfig.value.enabled = true
+    toast.success('Passkey 注册成功')
+  } catch (err: any) {
+    if (err.name === 'NotAllowedError') {
+      toast.error('用户取消了操作')
+    } else {
+      toast.error('Passkey 注册失败: ' + (err.message || '未知错误'))
+    }
+  } finally {
+    registeringPasskey.value = false
+  }
+}
+
+const disablePasskey = async () => {
+  try {
+    await api.post('/passkey/disable', {})
+    passkeyConfig.value.enabled = false
+    toast.success('Passkey 已禁用')
+  } catch {
+    toast.error('禁用 Passkey 失败')
+  }
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  return bytes.buffer
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
 onMounted(() => {
   loadConfig()
   loadTelegramConfig()
+  loadAuthStatus()
 })
 
 const systemInfo = [
@@ -332,20 +511,13 @@ const systemInfo = [
             <div class="flex items-center justify-between px-6 py-4">
               <div>
                 <p class="font-medium">Bot 运行状态</p>
-                <p class="text-sm text-muted-foreground mt-1">
-                  Bot 启动后可通过 /start 命令与 Bot 交互
-                </p>
+                <p class="text-sm text-muted-foreground mt-1">Bot 启动后可通过 /start 命令与 Bot 交互</p>
               </div>
               <div class="flex items-center gap-2">
                 <Badge :variant="telegramConfig.running ? 'success' : 'secondary'">
                   {{ telegramConfig.running ? '运行中' : '已停止' }}
                 </Badge>
-                <Button
-                  v-if="telegramConfig.running"
-                  variant="outline"
-                  size="sm"
-                  @click="stopTelegramBot"
-                >
+                <Button v-if="telegramConfig.running" variant="outline" size="sm" @click="stopTelegramBot">
                   <Square class="w-4 h-4" />
                   停止
                 </Button>
@@ -380,7 +552,9 @@ const systemInfo = [
                 <Button
                   variant="outline"
                   size="sm"
-                  :disabled="!telegramConfig.enabled || !telegramConfig.botToken || !telegramConfig.chatId || sendingTestMessage"
+                  :disabled="
+                    !telegramConfig.enabled || !telegramConfig.botToken || !telegramConfig.chatId || sendingTestMessage
+                  "
                   @click="sendTelegramTestMessage"
                 >
                   <Loader2 v-if="sendingTestMessage" class="w-4 h-4 animate-spin" />
@@ -388,6 +562,133 @@ const systemInfo = [
                   发送测试
                 </Button>
               </div>
+            </div>
+          </template>
+        </CardContent>
+      </Card>
+
+      <!-- MFA Settings Card -->
+      <Card
+        v-motion
+        :initial="{ opacity: 0, y: 20 }"
+        :enter="{ opacity: 1, y: 0, transition: { delay: 350 } }"
+        class="border-border/50"
+      >
+        <CardHeader class="border-b border-border/50">
+          <CardTitle class="flex items-center gap-2">
+            <Shield class="w-5 h-5 text-primary" />
+            双因素认证 (MFA)
+          </CardTitle>
+        </CardHeader>
+        <CardContent class="p-0 divide-y divide-border/50">
+          <div v-if="mfaLoading" class="text-center py-8">
+            <Loader2 class="w-8 h-8 mx-auto animate-spin text-primary" />
+          </div>
+          <template v-else>
+            <div class="flex items-center justify-between px-6 py-4">
+              <div>
+                <p class="font-medium">启用 MFA 验证</p>
+                <p class="text-sm text-muted-foreground mt-1">启用后登录时需要输入验证器 App 生成的动态验证码</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <Badge :variant="mfaConfig.enabled ? 'success' : 'secondary'">
+                  <component :is="mfaConfig.enabled ? ShieldCheck : ShieldOff" class="w-3 h-3 mr-1" />
+                  {{ mfaConfig.enabled ? '已启用' : '未启用' }}
+                </Badge>
+                <Button variant="outline" size="sm" @click="toggleMfaSetup">
+                  {{ mfaConfig.enabled ? '禁用' : '设置' }}
+                </Button>
+              </div>
+            </div>
+            <div v-if="showMfaSetup && !mfaConfig.enabled" class="px-6 py-4 space-y-4">
+              <div class="flex flex-col items-center">
+                <p class="text-sm text-muted-foreground mb-4">
+                  请使用 Google Authenticator、Microsoft Authenticator 或其他 TOTP 应用扫描二维码
+                </p>
+                <img
+                  v-if="mfaConfig.qrCode"
+                  :src="mfaConfig.qrCode"
+                  alt="MFA QR Code"
+                  class="w-48 h-48 border rounded-lg p-2 bg-white"
+                />
+                <p class="text-xs text-muted-foreground mt-2">
+                  或手动输入密钥:
+                  <code class="bg-secondary px-2 py-1 rounded text-xs">{{ mfaConfig.secret }}</code>
+                </p>
+              </div>
+              <div>
+                <label class="text-sm font-medium mb-2 block">输入验证码以确认启用</label>
+                <div class="flex gap-2">
+                  <Input
+                    v-model="mfaCode"
+                    type="text"
+                    placeholder="输入6位验证码"
+                    maxlength="6"
+                    class="w-40 text-center font-mono tracking-widest"
+                    @keyup.enter="enableMfa"
+                  />
+                  <Button :disabled="enablingMfa || mfaCode.length !== 6" @click="enableMfa">
+                    <Loader2 v-if="enablingMfa" class="w-4 h-4 animate-spin" />
+                    <ShieldCheck v-else class="w-4 h-4" />
+                    确认启用
+                  </Button>
+                  <Button variant="outline" @click="cancelMfaSetup">取消</Button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </CardContent>
+      </Card>
+
+      <!-- Passkey Settings Card -->
+      <Card
+        v-motion
+        :initial="{ opacity: 0, y: 20 }"
+        :enter="{ opacity: 1, y: 0, transition: { delay: 375 } }"
+        class="border-border/50"
+      >
+        <CardHeader class="border-b border-border/50">
+          <CardTitle class="flex items-center gap-2">
+            <Fingerprint class="w-5 h-5 text-primary" />
+            通行密钥 (Passkey)
+          </CardTitle>
+        </CardHeader>
+        <CardContent class="p-0 divide-y divide-border/50">
+          <div v-if="passkeyLoading" class="text-center py-8">
+            <Loader2 class="w-8 h-8 mx-auto animate-spin text-primary" />
+          </div>
+          <template v-else>
+            <div class="flex items-center justify-between px-6 py-4">
+              <div>
+                <p class="font-medium">启用 Passkey 验证</p>
+                <p class="text-sm text-muted-foreground mt-1">使用指纹、面容或安全密钥登录，无需输入验证码</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <Badge :variant="passkeyConfig.enabled ? 'success' : 'secondary'">
+                  <component :is="passkeyConfig.enabled ? KeyRound : ShieldOff" class="w-3 h-3 mr-1" />
+                  {{ passkeyConfig.enabled ? '已启用' : '未启用' }}
+                </Badge>
+                <Button
+                  v-if="!passkeyConfig.enabled"
+                  variant="outline"
+                  size="sm"
+                  :disabled="registeringPasskey"
+                  @click="registerPasskey"
+                >
+                  <Loader2 v-if="registeringPasskey" class="w-4 h-4 animate-spin" />
+                  <Fingerprint v-else class="w-4 h-4" />
+                  注册
+                </Button>
+                <Button v-else variant="outline" size="sm" @click="disablePasskey">
+                  <Trash2 class="w-4 h-4" />
+                  删除
+                </Button>
+              </div>
+            </div>
+            <div class="px-6 py-4">
+              <p class="text-xs text-muted-foreground">
+                提示：Passkey 和 MFA 只能二选一启用。启用 Passkey 后，登录时可以选择使用 Passkey 或账号密码。
+              </p>
             </div>
           </template>
         </CardContent>

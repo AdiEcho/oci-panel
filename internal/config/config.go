@@ -21,6 +21,10 @@ type Config struct {
 	Logging struct {
 		Level string `toml:"level"`
 	} `toml:"logging"`
+	Passkey struct {
+		RPID      string   `toml:"rp_id"`
+		RPOrigins []string `toml:"rp_origins"`
+	} `toml:"passkey"`
 }
 
 func Load() *Config {

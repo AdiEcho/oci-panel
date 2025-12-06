@@ -45,10 +45,26 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 		sys := api.Group("/sys")
 		{
 			sys.POST("/login", sysCtrl.Login)
+			sys.POST("/checkMfaCode", sysCtrl.CheckMfaCode)
 			sys.POST("/getGlance", sysCtrl.GetGlance)
 			sys.POST("/getSysCfg", sysCtrl.GetSysCfg)
 			sys.POST("/updateCacheCfg", sysCtrl.UpdateCacheCfg)
 			sys.POST("/refreshCache", sysCtrl.RefreshCache)
+			sys.POST("/getAuthStatus", sysCtrl.GetAuthStatus)
+			sys.POST("/generateMfaSecret", sysCtrl.GenerateMfaSecret)
+			sys.POST("/enableMfa", sysCtrl.EnableMfa)
+			sys.POST("/disableMfa", sysCtrl.DisableMfa)
+		}
+
+		passkeyCtrl := controllers.NewPasskeyController(cfg)
+		passkey := api.Group("/passkey")
+		{
+			passkey.POST("/status", passkeyCtrl.GetStatus)
+			passkey.POST("/beginRegistration", passkeyCtrl.BeginRegistration)
+			passkey.POST("/finishRegistration", passkeyCtrl.FinishRegistration)
+			passkey.POST("/beginLogin", passkeyCtrl.BeginLogin)
+			passkey.POST("/finishLogin", passkeyCtrl.FinishLogin)
+			passkey.POST("/disable", passkeyCtrl.Disable)
 		}
 
 		ociCtrl := controllers.NewOciController(ociService, schedulerService)

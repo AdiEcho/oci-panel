@@ -10,3 +10,12 @@ dsn = "db/oci-helper.db"
 
 [logging]
 level = "info"
+
+[passkey]
+# Relying Party ID - 通常是你的域名，不包含协议和端口
+# 本地开发使用 "localhost"，生产环境使用实际域名如 "example.com"
+rp_id = "localhost"
+# 允许的来源列表，包含协议和端口
+# 本地开发: ["http://localhost:8999"]
+# 生产环境: ["https://example.com"]
+rp_origins = ["http://localhost:8999"]
