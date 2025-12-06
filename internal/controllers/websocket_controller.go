@@ -1,11 +1,12 @@
 package controllers
 
 import (
+	"log"
+	"net/http"
+
 	"github.com/adiecho/oci-panel/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"log"
-	"net/http"
 )
 
 var upgrader = websocket.Upgrader{

@@ -6,7 +6,7 @@ account = "admin"
 password = "admin"
 
 [database]
-dsn = "oci-helper.db"
+dsn = "db/oci-helper.db"
 
 [logging]
 level = "info"

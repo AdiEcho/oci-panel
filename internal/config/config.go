@@ -1,9 +1,10 @@
 package config
 
 import (
-	"github.com/pelletier/go-toml/v2"
 	"log"
 	"os"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 type Config struct {

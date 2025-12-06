@@ -1,11 +1,12 @@
 package main
 
 import (
+	"log"
+
 	"github.com/adiecho/oci-panel/internal/config"
 	"github.com/adiecho/oci-panel/internal/database"
 	"github.com/adiecho/oci-panel/internal/router"
 	"github.com/gin-gonic/gin"
-	"log"
 )
 
 func main() {
