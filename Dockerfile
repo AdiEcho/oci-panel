@@ -19,5 +19,5 @@ RUN apk add --no-cache ca-certificates tzdata
 COPY --from=backend-builder /app/oci-panel .
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY config.toml.example ./config.toml
-EXPOSE 8818
+EXPOSE 8999
 CMD ["./oci-panel"]

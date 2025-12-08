@@ -1,0 +1,13 @@
+services:
+  oci-panel:
+    build: .
+    container_name: oci-panel
+    restart: unless-stopped
+    ports:
+      - "8999:8999"
+    volumes:
+      - ./config.toml:/app/config.toml
+      - ./db:/app/db
+      - ./keys:/app/keys
+    environment:
+      - TZ=Asia/Shanghai
