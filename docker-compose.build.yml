@@ -1,6 +1,6 @@
 services:
   oci-panel:
-    image: adiecho/oci-panel:latest
+    build: .
     container_name: oci-panel
     restart: unless-stopped
     ports:
