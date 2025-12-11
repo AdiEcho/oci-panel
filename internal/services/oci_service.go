@@ -296,27 +296,36 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		return fmt.Errorf("获取网络客户端失败: %w", err)
 	}
 
-	// 列出现有VCN
+	// 列出现有VCN（只获取Available状态的VCN）
+	vcnLifecycleState := core.VcnLifecycleStateAvailable
 	vcnResp, err := vnClient.ListVcns(ctx, core.ListVcnsRequest{
-		CompartmentId: &compartmentId,
+		CompartmentId:  &compartmentId,
+		LifecycleState: vcnLifecycleState,
 	})
 	if err != nil {
 		return fmt.Errorf("获取VCN列表失败: %w", err)
 	}
 
 	var subnetId string
-	if len(vcnResp.Items) > 0 {
-		// 使用现有VCN的子网
-		vcn := vcnResp.Items[0]
+	// 遍历所有VCN查找可用的公有子网
+	for _, vcn := range vcnResp.Items {
 		subnetResp, err := vnClient.ListSubnets(ctx, core.ListSubnetsRequest{
-			CompartmentId: &compartmentId,
-			VcnId:         vcn.Id,
+			CompartmentId:  &compartmentId,
+			VcnId:          vcn.Id,
+			LifecycleState: core.SubnetLifecycleStateAvailable,
 		})
 		if err != nil {
-			return fmt.Errorf("获取子网列表失败: %w", err)
+			continue
 		}
-		if len(subnetResp.Items) > 0 {
-			subnetId = *subnetResp.Items[0].Id
+		// 查找公有子网（ProhibitPublicIpOnVnic为false的子网）
+		for _, subnet := range subnetResp.Items {
+			if subnet.ProhibitPublicIpOnVnic != nil && !*subnet.ProhibitPublicIpOnVnic {
+				subnetId = *subnet.Id
+				break
+			}
+		}
+		if subnetId != "" {
+			break
 		}
 	}
 
