@@ -721,7 +721,30 @@ func (s *OCIService) ListVCNs(ctx context.Context, user *models.OciUser, compart
 	return vcns, nil
 }
 
-// ChangePublicIP 更改实例公网IP
+// GetPrivateIpIdForVnic 获取VNIC的私有IP的OCID
+func (s *OCIService) GetPrivateIpIdForVnic(ctx context.Context, user *models.OciUser, vnicId string) (string, error) {
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return "", err
+	}
+
+	req := core.ListPrivateIpsRequest{
+		VnicId: &vnicId,
+	}
+
+	resp, err := vnClient.ListPrivateIps(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to list private IPs: %w", err)
+	}
+
+	if len(resp.Items) == 0 {
+		return "", fmt.Errorf("no private IP found for VNIC: %s", vnicId)
+	}
+
+	return *resp.Items[0].Id, nil
+}
+
+// ChangePublicIP 更改实例公网IP（参考oci-helper实现）
 func (s *OCIService) ChangePublicIP(ctx context.Context, user *models.OciUser, vnicId string) (string, error) {
 	vnClient, err := s.GetVirtualNetworkClient(user)
 	if err != nil {
@@ -735,51 +758,41 @@ func (s *OCIService) ChangePublicIP(ctx context.Context, user *models.OciUser, v
 		return "", fmt.Errorf("failed to get VNIC: %w", err)
 	}
 
-	// 检查是否有公网IP
-	if vnicResp.PublicIp == nil || *vnicResp.PublicIp == "" {
-		return "", fmt.Errorf("VNIC does not have a public IP")
-	}
+	// Step 1: 如果有现有公网IP，先删除
+	if vnicResp.PublicIp != nil && *vnicResp.PublicIp != "" {
+		// 通过IP地址获取Public IP的OCID
+		getPublicIpReq := core.GetPublicIpByIpAddressRequest{
+			GetPublicIpByIpAddressDetails: core.GetPublicIpByIpAddressDetails{
+				IpAddress: vnicResp.PublicIp,
+			},
+		}
+		getPublicIpResp, err := vnClient.GetPublicIpByIpAddress(ctx, getPublicIpReq)
+		if err != nil {
+			return "", fmt.Errorf("failed to get public IP by address: %w", err)
+		}
 
-	// 获取现有的public IP对象
-	listPublicIpsReq := core.ListPublicIpsRequest{
-		Scope:         core.ListPublicIpsScopeRegion,
-		CompartmentId: &user.OciTenantID,
-		Lifetime:      core.ListPublicIpsLifetimeEphemeral,
-	}
-	publicIpsResp, err := vnClient.ListPublicIps(ctx, listPublicIpsReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to list public IPs: %w", err)
-	}
-
-	// 找到对应的publicIP对象
-	var publicIpId *string
-	for _, pip := range publicIpsResp.Items {
-		if pip.AssignedEntityId != nil && *pip.AssignedEntityId == vnicId {
-			publicIpId = pip.Id
-			break
+		// 删除现有公网IP
+		deleteReq := core.DeletePublicIpRequest{PublicIpId: getPublicIpResp.Id}
+		_, err = vnClient.DeletePublicIp(ctx, deleteReq)
+		if err != nil {
+			return "", fmt.Errorf("failed to delete public IP: %w", err)
 		}
 	}
 
-	if publicIpId == nil {
-		return "", fmt.Errorf("could not find public IP object for VNIC")
-	}
-
-	// 删除现有公网IP
-	deleteReq := core.DeletePublicIpRequest{PublicIpId: publicIpId}
-	_, err = vnClient.DeletePublicIp(ctx, deleteReq)
+	// Step 2: 获取VNIC的私有IP的OCID（这是关键，不能使用IP地址字符串）
+	privateIpId, err := s.GetPrivateIpIdForVnic(ctx, user, vnicId)
 	if err != nil {
-		return "", fmt.Errorf("failed to delete public IP: %w", err)
+		return "", fmt.Errorf("failed to get private IP ID: %w", err)
 	}
 
-	// 等待一下确保删除完成
-	time.Sleep(2 * time.Second)
-
-	// 创建新的临时公网IP
+	// Step 3: 创建新的临时公网IP
+	displayName := "publicIp"
 	createReq := core.CreatePublicIpRequest{
 		CreatePublicIpDetails: core.CreatePublicIpDetails{
 			CompartmentId: &user.OciTenantID,
 			Lifetime:      core.CreatePublicIpDetailsLifetimeEphemeral,
-			PrivateIpId:   vnicResp.PrivateIp,
+			DisplayName:   &displayName,
+			PrivateIpId:   &privateIpId,
 		},
 	}
 	createResp, err := vnClient.CreatePublicIp(ctx, createReq)

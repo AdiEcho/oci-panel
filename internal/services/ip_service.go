@@ -84,75 +84,15 @@ func (s *IpService) ChangePublicIp(userId string, instanceId string, compartment
 		return "", fmt.Errorf("vnic id is nil")
 	}
 
-	vnic, err := s.GetVnic(userId, *vnicId)
+	ctx := context.Background()
+
+	// 使用OCIService的ChangePublicIP方法（已修复使用正确的PrivateIpId）
+	newIp, err := s.ociService.ChangePublicIP(ctx, &user, *vnicId)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to change public ip: %w", err)
 	}
 
-	if vnic.PublicIp == nil {
-		return "", fmt.Errorf("no public ip found")
-	}
-
-	networkClient, err := s.ociService.GetVirtualNetworkClient(&user)
-	if err != nil {
-		return "", err
-	}
-
-	listReq := core.ListPublicIpsRequest{
-		Scope:         core.ListPublicIpsScopeRegion,
-		CompartmentId: &compartmentId,
-	}
-
-	listResp, err := networkClient.ListPublicIps(context.Background(), listReq)
-	if err != nil {
-		return "", err
-	}
-
-	var publicIpId *string
-	for _, pip := range listResp.Items {
-		if pip.IpAddress != nil && *pip.IpAddress == *vnic.PublicIp {
-			publicIpId = pip.Id
-			break
-		}
-	}
-
-	if publicIpId == nil {
-		return "", fmt.Errorf("public ip not found")
-	}
-
-	deleteReq := core.DeletePublicIpRequest{
-		PublicIpId: publicIpId,
-	}
-
-	_, err = networkClient.DeletePublicIp(context.Background(), deleteReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to delete old public ip: %w", err)
-	}
-
-	privateIpId := vnic.PrivateIp
-	if privateIpId == nil {
-		return "", fmt.Errorf("private ip id is nil")
-	}
-
-	lifetime := core.CreatePublicIpDetailsLifetimeEphemeral
-	createReq := core.CreatePublicIpRequest{
-		CreatePublicIpDetails: core.CreatePublicIpDetails{
-			CompartmentId: &compartmentId,
-			Lifetime:      lifetime,
-			PrivateIpId:   privateIpId,
-		},
-	}
-
-	createResp, err := networkClient.CreatePublicIp(context.Background(), createReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to create new public ip: %w", err)
-	}
-
-	if createResp.IpAddress == nil {
-		return "", fmt.Errorf("new public ip address is nil")
-	}
-
-	return *createResp.IpAddress, nil
+	return newIp, nil
 }
 
 func (s *IpService) AttachIpv6(userId string, vnicId string, ipv6SubnetCidr string) error {
