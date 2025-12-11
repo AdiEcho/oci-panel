@@ -130,13 +130,14 @@ func (s *InstanceService) ChangePublicIP(userId string, instanceId string) (stri
 }
 
 // UpdateInstanceConfig 更新实例配置（CPU和内存）
-func (s *InstanceService) UpdateInstanceConfig(userId string, instanceId string, ocpus float32, memoryInGBs float32) error {
+// autoRestart: 是否在更新后自动重启实例（如果实例原来是运行状态）
+func (s *InstanceService) UpdateInstanceConfig(userId string, instanceId string, ocpus float32, memoryInGBs float32, autoRestart bool) error {
 	var user models.OciUser
 	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
 		return fmt.Errorf("user not found: %w", err)
 	}
 
-	return s.ociService.UpdateInstanceShape(context.Background(), &user, instanceId, ocpus, memoryInGBs)
+	return s.ociService.UpdateInstanceShape(context.Background(), &user, instanceId, ocpus, memoryInGBs, autoRestart)
 }
 
 // UpdateBootVolumeConfig 更新引导卷配置（通过实例ID）

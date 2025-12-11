@@ -808,7 +808,8 @@ func (s *OCIService) ChangePublicIP(ctx context.Context, user *models.OciUser, v
 }
 
 // UpdateInstanceShape 更新实例配置（CPU和内存）
-func (s *OCIService) UpdateInstanceShape(ctx context.Context, user *models.OciUser, instanceId string, ocpus float32, memoryInGBs float32) error {
+// autoRestart: 是否在更新后自动重启实例
+func (s *OCIService) UpdateInstanceShape(ctx context.Context, user *models.OciUser, instanceId string, ocpus float32, memoryInGBs float32, autoRestart bool) error {
 	client, err := s.GetComputeClient(user)
 	if err != nil {
 		return err
@@ -820,11 +821,39 @@ func (s *OCIService) UpdateInstanceShape(ctx context.Context, user *models.OciUs
 		return fmt.Errorf("failed to get instance: %w", err)
 	}
 
-	// 确保实例已停止
-	if instance.LifecycleState != core.InstanceLifecycleStateStopped {
-		return fmt.Errorf("instance must be stopped before updating shape config")
+	// 记录原始状态，以便决定是否需要重启
+	wasRunning := instance.LifecycleState == core.InstanceLifecycleStateRunning
+
+	// 如果实例正在运行，需要先停止
+	if instance.LifecycleState == core.InstanceLifecycleStateRunning {
+		// 停止实例
+		_, err = client.InstanceAction(ctx, core.InstanceActionRequest{
+			InstanceId: instance.Id,
+			Action:     core.InstanceActionActionStop,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to stop instance: %w", err)
+		}
+
+		// 等待实例停止
+		for {
+			instResp, err := client.GetInstance(ctx, core.GetInstanceRequest{InstanceId: instance.Id})
+			if err != nil {
+				return fmt.Errorf("failed to get instance status: %w", err)
+			}
+			if instResp.LifecycleState == core.InstanceLifecycleStateStopped {
+				break
+			}
+			if instResp.LifecycleState == core.InstanceLifecycleStateTerminated {
+				return fmt.Errorf("instance was terminated unexpectedly")
+			}
+			time.Sleep(3 * time.Second)
+		}
+	} else if instance.LifecycleState != core.InstanceLifecycleStateStopped {
+		return fmt.Errorf("instance is in %s state, cannot update config", instance.LifecycleState)
 	}
 
+	// 更新实例配置
 	req := core.UpdateInstanceRequest{
 		InstanceId: &instanceId,
 		UpdateInstanceDetails: core.UpdateInstanceDetails{
@@ -836,7 +865,23 @@ func (s *OCIService) UpdateInstanceShape(ctx context.Context, user *models.OciUs
 	}
 
 	_, err = client.UpdateInstance(ctx, req)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to update instance config: %w", err)
+	}
+
+	// 如果需要自动重启，且实例之前是运行状态
+	if autoRestart && wasRunning {
+		// 启动实例
+		_, err = client.InstanceAction(ctx, core.InstanceActionRequest{
+			InstanceId: instance.Id,
+			Action:     core.InstanceActionActionStart,
+		})
+		if err != nil {
+			return fmt.Errorf("config updated but failed to restart instance: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // UpdateBootVolume 更新引导卷配置

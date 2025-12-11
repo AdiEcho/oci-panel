@@ -149,6 +149,7 @@ type UpdateInstanceConfigRequest struct {
 	InstanceId  string  `json:"instanceId" binding:"required"`
 	Ocpus       float32 `json:"ocpus" binding:"required,gt=0"`
 	MemoryInGBs float32 `json:"memoryInGBs" binding:"required,gt=0"`
+	AutoRestart bool    `json:"autoRestart"` // 是否自动重启实例，默认false
 }
 
 func (ic *InstanceController) UpdateInstanceConfig(c *gin.Context) {
@@ -158,12 +159,16 @@ func (ic *InstanceController) UpdateInstanceConfig(c *gin.Context) {
 		return
 	}
 
-	if err := ic.instanceService.UpdateInstanceConfig(req.UserId, req.InstanceId, req.Ocpus, req.MemoryInGBs); err != nil {
+	if err := ic.instanceService.UpdateInstanceConfig(req.UserId, req.InstanceId, req.Ocpus, req.MemoryInGBs, req.AutoRestart); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(nil, "实例配置更新成功"))
+	msg := "实例配置更新成功"
+	if req.AutoRestart {
+		msg = "实例配置更新成功，正在重启实例"
+	}
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, msg))
 }
 
 type UpdateBootVolumeRequest struct {
