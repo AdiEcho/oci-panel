@@ -307,8 +307,10 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 	}
 
 	var subnetId string
+	var targetVcn *core.Vcn
 	// 遍历所有VCN查找可用的公有子网
-	for _, vcn := range vcnResp.Items {
+	for i := range vcnResp.Items {
+		vcn := &vcnResp.Items[i]
 		subnetResp, err := vnClient.ListSubnets(ctx, core.ListSubnetsRequest{
 			CompartmentId:  &compartmentId,
 			VcnId:          vcn.Id,
@@ -327,10 +329,153 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		if subnetId != "" {
 			break
 		}
+		// 保存第一个VCN用于后续创建子网
+		if targetVcn == nil {
+			targetVcn = vcn
+		}
 	}
 
+	// 如果没有可用的公有子网，自动创建VCN和子网
 	if subnetId == "" {
-		return fmt.Errorf("没有可用的子网，请先创建VCN和子网")
+		cidrBlock := "10.0.0.0/16"
+
+		// 如果没有VCN，则创建新的VCN
+		if targetVcn == nil {
+			vcnName := "oci-panel-vcn"
+			isIpv6Enabled := true
+			createVcnResp, err := vnClient.CreateVcn(ctx, core.CreateVcnRequest{
+				CreateVcnDetails: core.CreateVcnDetails{
+					CompartmentId: &compartmentId,
+					DisplayName:   &vcnName,
+					CidrBlock:     &cidrBlock,
+					IsIpv6Enabled: &isIpv6Enabled,
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("创建VCN失败: %w", err)
+			}
+			// 等待VCN创建完成
+			for i := 0; i < 30; i++ {
+				getVcnResp, err := vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: createVcnResp.Id})
+				if err == nil && getVcnResp.LifecycleState == core.VcnLifecycleStateAvailable {
+					targetVcn = &getVcnResp.Vcn
+					break
+				}
+				time.Sleep(time.Second)
+			}
+			if targetVcn == nil {
+				return fmt.Errorf("等待VCN创建超时")
+			}
+		} else {
+			// 使用现有VCN的CIDR
+			if targetVcn.CidrBlock != nil {
+				cidrBlock = *targetVcn.CidrBlock
+			}
+		}
+
+		// 检查是否有Internet网关，如果没有则创建
+		igwResp, err := vnClient.ListInternetGateways(ctx, core.ListInternetGatewaysRequest{
+			CompartmentId: &compartmentId,
+			VcnId:         targetVcn.Id,
+		})
+		if err != nil {
+			return fmt.Errorf("获取Internet网关列表失败: %w", err)
+		}
+
+		var internetGatewayId *string
+		if len(igwResp.Items) == 0 {
+			// 创建Internet网关
+			igwName := "oci-panel-gateway"
+			isEnabled := true
+			createIgwResp, err := vnClient.CreateInternetGateway(ctx, core.CreateInternetGatewayRequest{
+				CreateInternetGatewayDetails: core.CreateInternetGatewayDetails{
+					CompartmentId: &compartmentId,
+					VcnId:         targetVcn.Id,
+					DisplayName:   &igwName,
+					IsEnabled:     &isEnabled,
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("创建Internet网关失败: %w", err)
+			}
+			// 等待Internet网关创建完成
+			for i := 0; i < 30; i++ {
+				getIgwResp, err := vnClient.GetInternetGateway(ctx, core.GetInternetGatewayRequest{IgId: createIgwResp.Id})
+				if err == nil && getIgwResp.LifecycleState == core.InternetGatewayLifecycleStateAvailable {
+					internetGatewayId = createIgwResp.Id
+					break
+				}
+				time.Sleep(time.Second)
+			}
+			if internetGatewayId == nil {
+				return fmt.Errorf("等待Internet网关创建超时")
+			}
+		} else {
+			internetGatewayId = igwResp.Items[0].Id
+		}
+
+		// 添加路由规则到默认路由表
+		if targetVcn.DefaultRouteTableId != nil {
+			getRtResp, err := vnClient.GetRouteTable(ctx, core.GetRouteTableRequest{RtId: targetVcn.DefaultRouteTableId})
+			if err == nil {
+				// 检查是否已存在0.0.0.0/0路由规则
+				hasDefaultRoute := false
+				for _, rule := range getRtResp.RouteRules {
+					if rule.Destination != nil && *rule.Destination == "0.0.0.0/0" {
+						hasDefaultRoute = true
+						break
+					}
+				}
+				// 如果没有默认路由，则添加
+				if !hasDefaultRoute {
+					destination := "0.0.0.0/0"
+					newRule := core.RouteRule{
+						Destination:     &destination,
+						DestinationType: core.RouteRuleDestinationTypeCidrBlock,
+						NetworkEntityId: internetGatewayId,
+					}
+					updatedRules := append(getRtResp.RouteRules, newRule)
+					_, err = vnClient.UpdateRouteTable(ctx, core.UpdateRouteTableRequest{
+						RtId: targetVcn.DefaultRouteTableId,
+						UpdateRouteTableDetails: core.UpdateRouteTableDetails{
+							RouteRules: updatedRules,
+						},
+					})
+					if err != nil {
+						return fmt.Errorf("更新路由表失败: %w", err)
+					}
+				}
+			}
+		}
+
+		// 创建公有子网
+		subnetName := "oci-panel-subnet"
+		prohibitPublicIp := false
+		createSubnetResp, err := vnClient.CreateSubnet(ctx, core.CreateSubnetRequest{
+			CreateSubnetDetails: core.CreateSubnetDetails{
+				CompartmentId:          &compartmentId,
+				VcnId:                  targetVcn.Id,
+				DisplayName:            &subnetName,
+				CidrBlock:              &cidrBlock,
+				RouteTableId:           targetVcn.DefaultRouteTableId,
+				ProhibitPublicIpOnVnic: &prohibitPublicIp,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("创建子网失败: %w", err)
+		}
+		// 等待子网创建完成
+		for i := 0; i < 30; i++ {
+			getSubnetResp, err := vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: createSubnetResp.Id})
+			if err == nil && getSubnetResp.LifecycleState == core.SubnetLifecycleStateAvailable {
+				subnetId = *createSubnetResp.Id
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		if subnetId == "" {
+			return fmt.Errorf("等待子网创建超时")
+		}
 	}
 
 	// 4. 确定Shape
