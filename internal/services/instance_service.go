@@ -17,18 +17,7 @@ func NewInstanceService(ociService *OCIService) *InstanceService {
 	return &InstanceService{ociService: ociService}
 }
 
-type InstanceInfo struct {
-	ID                 string `json:"id"`
-	DisplayName        string `json:"displayName"`
-	State              string `json:"state"`
-	AvailabilityDomain string `json:"availabilityDomain"`
-	Shape              string `json:"shape"`
-	TimeCreated        string `json:"timeCreated"`
-	PublicIp           string `json:"publicIp"`
-	PrivateIp          string `json:"privateIp"`
-}
-
-func (s *InstanceService) ListInstances(userId string, compartmentId string) ([]InstanceInfo, error) {
+func (s *InstanceService) ListInstances(userId string, compartmentId string) ([]models.InstanceInfo, error) {
 	var user models.OciUser
 	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -39,15 +28,15 @@ func (s *InstanceService) ListInstances(userId string, compartmentId string) ([]
 		return nil, err
 	}
 
-	var result []InstanceInfo
+	var result []models.InstanceInfo
 	for _, inst := range instances {
-		info := InstanceInfo{
+		info := models.InstanceInfo{
 			ID:                 *inst.Id,
 			DisplayName:        *inst.DisplayName,
 			State:              string(inst.LifecycleState),
 			AvailabilityDomain: *inst.AvailabilityDomain,
 			Shape:              *inst.Shape,
-			TimeCreated:        inst.TimeCreated.String(),
+			CreateTime:         inst.TimeCreated.Format("2006-01-02 15:04:05"),
 		}
 		result = append(result, info)
 	}

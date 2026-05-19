@@ -73,7 +73,7 @@ const registeringPasskey = ref(false)
 const loadConfig = async () => {
   loading.value = true
   try {
-    const response = await api.post('/sys/getSysCfg', {})
+    const response = await api.get('/sys/getSysCfg')
     if (response.data) {
       config.value = response.data
       cacheConfig.value.cacheEnabled = response.data.cacheEnabled || false
@@ -113,7 +113,7 @@ const refreshCache = async () => {
 const loadTelegramConfig = async () => {
   telegramLoading.value = true
   try {
-    const response = await api.post('/telegram/getConfig', {})
+    const response = await api.get('/telegram/getConfig')
     if (response.data) {
       telegramConfig.value = response.data
     }
@@ -186,7 +186,7 @@ const loadAuthStatus = async () => {
   mfaLoading.value = true
   passkeyLoading.value = true
   try {
-    const response = await api.post('/sys/getAuthStatus', {})
+    const response = await api.get('/sys/getAuthStatus')
     if (response.data) {
       mfaConfig.value.enabled = response.data.mfaEnabled
       passkeyConfig.value.enabled = response.data.passkeyEnabled

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { toast } from '@/composables/useToast'
 
 const api = axios.create({
   baseURL: '/api',
@@ -26,7 +27,9 @@ api.interceptors.response.use(
   response => {
     const data = response.data
     if (data.code && data.code !== 200) {
-      return Promise.reject(new Error(data.message || '请求失败'))
+      const msg = data.message || '请求失败'
+      toast.error(msg)
+      return Promise.reject(new Error(msg))
     }
     return data
   },
@@ -38,10 +41,20 @@ api.interceptors.response.use(
         const authStore = useAuthStore()
         authStore.logout()
         window.location.href = '/login'
+        return Promise.reject(new Error('登录已过期，请重新登录'))
       }
 
-      return Promise.reject(new Error(data.message || error.message))
+      const msg = data.message || error.message || '请求失败'
+      toast.error(msg)
+      return Promise.reject(new Error(msg))
     }
+
+    if (error.code === 'ECONNABORTED') {
+      toast.error('请求超时，请稍后重试')
+    } else if (!error.response) {
+      toast.error('网络连接失败，请检查网络')
+    }
+
     return Promise.reject(error)
   }
 )

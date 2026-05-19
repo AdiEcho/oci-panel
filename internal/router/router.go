@@ -46,11 +46,11 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 		{
 			sys.POST("/login", sysCtrl.Login)
 			sys.POST("/checkMfaCode", sysCtrl.CheckMfaCode)
-			sys.POST("/getGlance", sysCtrl.GetGlance)
-			sys.POST("/getSysCfg", sysCtrl.GetSysCfg)
+			sys.GET("/getGlance", sysCtrl.GetGlance)
+			sys.GET("/getSysCfg", sysCtrl.GetSysCfg)
 			sys.POST("/updateCacheCfg", sysCtrl.UpdateCacheCfg)
 			sys.POST("/refreshCache", sysCtrl.RefreshCache)
-			sys.POST("/getAuthStatus", sysCtrl.GetAuthStatus)
+			sys.GET("/getAuthStatus", sysCtrl.GetAuthStatus)
 			sys.POST("/generateMfaSecret", sysCtrl.GenerateMfaSecret)
 			sys.POST("/enableMfa", sysCtrl.EnableMfa)
 			sys.POST("/disableMfa", sysCtrl.DisableMfa)
@@ -59,7 +59,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 		passkeyCtrl := controllers.NewPasskeyController(cfg)
 		passkey := api.Group("/passkey")
 		{
-			passkey.POST("/status", passkeyCtrl.GetStatus)
+			passkey.GET("/status", passkeyCtrl.GetStatus)
 			passkey.POST("/beginRegistration", passkeyCtrl.BeginRegistration)
 			passkey.POST("/finishRegistration", passkeyCtrl.FinishRegistration)
 			passkey.POST("/beginLogin", passkeyCtrl.BeginLogin)
@@ -99,7 +99,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			oci.POST("/images", ociCtrl.ListImages)
 		}
 
-		instanceCtrl := controllers.NewInstanceController(instanceService)
+		instanceCtrl := controllers.NewInstanceController(instanceService, wsService)
 		instance := api.Group("/instance")
 		{
 			instance.POST("/list", instanceCtrl.ListInstances)
@@ -134,7 +134,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 		keyCtrl := controllers.NewKeyController()
 		key := api.Group("/key")
 		{
-			key.POST("/list", keyCtrl.ListKeys)
+			key.GET("/list", keyCtrl.ListKeys)
 			key.POST("/create", keyCtrl.CreateKey)
 			key.POST("/update", keyCtrl.UpdateKey)
 			key.POST("/delete", keyCtrl.DeleteKey)
@@ -168,7 +168,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 		telegramCtrl := controllers.NewTelegramController(telegramService)
 		telegram := api.Group("/telegram")
 		{
-			telegram.POST("/getConfig", telegramCtrl.GetConfig)
+			telegram.GET("/getConfig", telegramCtrl.GetConfig)
 			telegram.POST("/updateConfig", telegramCtrl.UpdateConfig)
 			telegram.POST("/testConnection", telegramCtrl.TestConnection)
 			telegram.POST("/sendTestMessage", telegramCtrl.SendTestMessage)

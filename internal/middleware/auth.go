@@ -5,12 +5,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adiecho/oci-panel/internal/config"
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("oci-helper-secret-key-change-this-in-production")
+var jwtSecret []byte
+
+func InitJwtSecret(cfg *config.Config) {
+	secret := cfg.Web.JwtSecret
+	if secret == "" {
+		secret = "oci-helper-secret-key-please-change-in-config"
+	}
+	jwtSecret = []byte(secret)
+}
 
 type Claims struct {
 	Username string `json:"username"`

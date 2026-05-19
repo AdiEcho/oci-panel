@@ -5,12 +5,14 @@ import (
 
 	"github.com/adiecho/oci-panel/internal/config"
 	"github.com/adiecho/oci-panel/internal/database"
+	"github.com/adiecho/oci-panel/internal/middleware"
 	"github.com/adiecho/oci-panel/internal/router"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	cfg := config.Load()
+	middleware.InitJwtSecret(cfg)
 
 	if err := database.InitDB(cfg.Database.DSN); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -105,7 +106,10 @@ type LogMessage struct {
 }
 
 func (ws *WebSocketService) SendStructuredLog(logMsg LogMessage) {
-	import_json := fmt.Sprintf(`{"time":"%s","level":"%s","message":"%s"}`,
-		logMsg.Time, logMsg.Level, logMsg.Message)
-	ws.BroadcastMessage([]byte(import_json))
+	data, err := json.Marshal(logMsg)
+	if err != nil {
+		ws.SendError(fmt.Sprintf("failed to marshal log message: %v", err))
+		return
+	}
+	ws.BroadcastMessage(data)
 }

@@ -42,11 +42,13 @@ const form = ref({
 const loadKeys = async (page = 1) => {
   loading.value = true
   try {
-    const response = await api.post('/key/list', {
-      page,
-      pageSize,
-      name: searchText.value,
-      keyType: filterType.value
+    const response = await api.get('/key/list', {
+      params: {
+        page,
+        pageSize,
+        name: searchText.value,
+        keyType: filterType.value
+      }
     })
     keys.value = response.data.list || []
     currentPage.value = response.data.page

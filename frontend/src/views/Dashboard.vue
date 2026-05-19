@@ -17,7 +17,7 @@ const loading = ref(true)
 
 const loadStats = async () => {
   try {
-    const response = await api.post('/sys/getGlance', {})
+    const response = await api.get('/sys/getGlance')
     if (response.data) {
       stats.value = response.data
     }

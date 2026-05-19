@@ -12,8 +12,9 @@ type Config struct {
 		Port string `toml:"port"`
 	} `toml:"server"`
 	Web struct {
-		Account  string `toml:"account"`
-		Password string `toml:"password"`
+		Account   string `toml:"account"`
+		Password  string `toml:"password"`
+		JwtSecret string `toml:"jwt_secret"`
 	} `toml:"web"`
 	Database struct {
 		DSN string `toml:"dsn"`

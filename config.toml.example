@@ -4,6 +4,8 @@ port = "8999"
 [web]
 account = "admin"
 password = "admin"
+# JWT signing secret - change this in production
+jwt_secret = "change-this-to-a-random-string-in-production"
 
 [database]
 dsn = "db/oci-helper.db"

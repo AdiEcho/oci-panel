@@ -45,15 +45,15 @@ func (kc *KeyController) CreateKey(c *gin.Context) {
 }
 
 type KeyPageRequest struct {
-	Page     int    `json:"page" binding:"required,min=1"`
-	PageSize int    `json:"pageSize" binding:"required,min=1,max=100"`
-	KeyType  string `json:"keyType"`
-	Name     string `json:"name"`
+	Page     int    `json:"page" form:"page" binding:"required,min=1"`
+	PageSize int    `json:"pageSize" form:"pageSize" binding:"required,min=1,max=100"`
+	KeyType  string `json:"keyType" form:"keyType"`
+	Name     string `json:"name" form:"name"`
 }
 
 func (kc *KeyController) ListKeys(c *gin.Context) {
 	var req KeyPageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
 		return
 	}
