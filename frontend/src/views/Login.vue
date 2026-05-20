@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMotion } from '@vueuse/motion'
 import { Cloud, Lock, User, ArrowRight, Loader2, Shield, Fingerprint } from 'lucide-vue-next'
@@ -27,6 +27,9 @@ const mfaCode = ref('')
 const verifyingMfa = ref(false)
 const verifyingPasskey = ref(false)
 
+const loginMode = ref<'passkey' | 'password'>('password')
+const checkingPasskey = ref(true)
+
 const cardRef = ref<HTMLElement>()
 
 useMotion(cardRef, {
@@ -39,6 +42,20 @@ useMotion(cardRef, {
       duration: 600,
       ease: [0.16, 1, 0.3, 1]
     }
+  }
+})
+
+onMounted(async () => {
+  try {
+    const res = await api.get('/passkey/status')
+    if (res.data?.enabled) {
+      loginMode.value = 'passkey'
+      passkeyEnabled.value = true
+    }
+  } catch {
+    // passkey status check failed, default to password
+  } finally {
+    checkingPasskey.value = false
   }
 })
 
@@ -152,10 +169,19 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
+const switchToPassword = () => {
+  loginMode.value = 'password'
+  error.value = ''
+}
+
+const switchToPasskey = () => {
+  loginMode.value = 'passkey'
+  error.value = ''
+}
+
 const backToLogin = () => {
   needMfa.value = false
   needPasskey.value = false
-  passkeyEnabled.value = false
   mfaCode.value = ''
   error.value = ''
 }
@@ -203,58 +229,137 @@ const backToLogin = () => {
           </p>
         </div>
 
-        <!-- Login Form -->
-        <form v-if="!needMfa && !needPasskey" class="space-y-6" @submit.prevent="handleLogin">
-          <div v-motion :initial="{ opacity: 0, x: -20 }" :enter="{ opacity: 1, x: 0, transition: { delay: 500 } }">
-            <label class="block text-sm font-medium mb-2">
-              <User class="w-4 h-4 inline mr-2 text-muted-foreground" />
-              账号
-            </label>
-            <Input
-              v-model="form.account"
-              type="text"
-              placeholder="请输入账号"
-              required
-              autocomplete="username"
-              class="h-11 bg-secondary/50 border-border/50 focus:border-primary"
-            />
-          </div>
+        <!-- Loading passkey status -->
+        <div v-if="checkingPasskey" class="flex justify-center py-8">
+          <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
 
-          <div v-motion :initial="{ opacity: 0, x: -20 }" :enter="{ opacity: 1, x: 0, transition: { delay: 600 } }">
-            <label class="block text-sm font-medium mb-2">
-              <Lock class="w-4 h-4 inline mr-2 text-muted-foreground" />
-              密码
-            </label>
-            <Input
-              v-model="form.password"
-              type="password"
-              placeholder="请输入密码"
-              required
-              autocomplete="current-password"
-              class="h-11 bg-secondary/50 border-border/50 focus:border-primary"
-            />
-          </div>
+        <!-- Main login area (not in MFA/Passkey verification flow) -->
+        <template v-else-if="!needMfa && !needPasskey">
+          <!-- Passkey Login -->
+          <div v-if="loginMode === 'passkey'" class="space-y-6">
+            <div class="text-center mb-4">
+              <div
+                v-motion
+                :initial="{ scale: 0 }"
+                :enter="{ scale: 1, transition: { delay: 300, duration: 400 } }"
+                class="inline-flex items-center justify-center w-14 h-14 bg-primary/10 rounded-full mb-3"
+              >
+                <Fingerprint class="w-7 h-7 text-primary" />
+              </div>
+              <p
+                v-motion
+                :initial="{ opacity: 0 }"
+                :enter="{ opacity: 1, transition: { delay: 400 } }"
+                class="text-sm text-muted-foreground"
+              >
+                使用通行密钥快速登录
+              </p>
+            </div>
 
-          <div v-motion :initial="{ opacity: 0, y: 20 }" :enter="{ opacity: 1, y: 0, transition: { delay: 700 } }">
-            <Button
-              type="submit"
-              :disabled="loading"
-              :loading="loading"
-              class="w-full h-11 text-base font-medium group"
+            <div v-motion :initial="{ opacity: 0, y: 20 }" :enter="{ opacity: 1, y: 0, transition: { delay: 500 } }">
+              <Button
+                :disabled="verifyingPasskey"
+                class="w-full h-12 text-base font-medium group"
+                @click="handlePasskeyLogin"
+              >
+                <template v-if="!verifyingPasskey">
+                  <Fingerprint class="w-5 h-5 mr-2" />
+                  使用通行密钥登录
+                </template>
+                <template v-else>
+                  <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+                  验证中...
+                </template>
+              </Button>
+            </div>
+
+            <div
+              v-motion
+              :initial="{ opacity: 0 }"
+              :enter="{ opacity: 1, transition: { delay: 600 } }"
+              class="text-center"
             >
-              <template v-if="!loading">
-                登录
-                <ArrowRight class="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-              </template>
-              <template v-else>
-                <Loader2 class="w-4 h-4 mr-2 animate-spin" />
-                登录中...
-              </template>
-            </Button>
+              <button
+                type="button"
+                class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                @click="switchToPassword"
+              >
+                使用密码登录
+              </button>
+            </div>
           </div>
-        </form>
 
-        <!-- MFA/Passkey Verification -->
+          <!-- Password Login -->
+          <form v-else class="space-y-6" @submit.prevent="handleLogin">
+            <div v-motion :initial="{ opacity: 0, x: -20 }" :enter="{ opacity: 1, x: 0, transition: { delay: 500 } }">
+              <label class="block text-sm font-medium mb-2">
+                <User class="w-4 h-4 inline mr-2 text-muted-foreground" />
+                账号
+              </label>
+              <Input
+                v-model="form.account"
+                type="text"
+                placeholder="请输入账号"
+                required
+                autocomplete="username"
+                class="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+              />
+            </div>
+
+            <div v-motion :initial="{ opacity: 0, x: -20 }" :enter="{ opacity: 1, x: 0, transition: { delay: 600 } }">
+              <label class="block text-sm font-medium mb-2">
+                <Lock class="w-4 h-4 inline mr-2 text-muted-foreground" />
+                密码
+              </label>
+              <Input
+                v-model="form.password"
+                type="password"
+                placeholder="请输入密码"
+                required
+                autocomplete="current-password"
+                class="h-11 bg-secondary/50 border-border/50 focus:border-primary"
+              />
+            </div>
+
+            <div v-motion :initial="{ opacity: 0, y: 20 }" :enter="{ opacity: 1, y: 0, transition: { delay: 700 } }">
+              <Button
+                type="submit"
+                :disabled="loading"
+                :loading="loading"
+                class="w-full h-11 text-base font-medium group"
+              >
+                <template v-if="!loading">
+                  登录
+                  <ArrowRight class="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+                </template>
+                <template v-else>
+                  <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+                  登录中...
+                </template>
+              </Button>
+            </div>
+
+            <div
+              v-if="passkeyEnabled"
+              v-motion
+              :initial="{ opacity: 0 }"
+              :enter="{ opacity: 1, transition: { delay: 800 } }"
+              class="text-center"
+            >
+              <button
+                type="button"
+                class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                @click="switchToPasskey"
+              >
+                <Fingerprint class="w-4 h-4 inline mr-1" />
+                使用通行密钥登录
+              </button>
+            </div>
+          </form>
+        </template>
+
+        <!-- MFA/Passkey Verification (after password login) -->
         <div v-else class="space-y-6">
           <!-- Passkey Option -->
           <div v-if="passkeyEnabled" class="space-y-4">

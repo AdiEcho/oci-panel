@@ -68,6 +68,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// API请求中不需要认证的路径
 		if path == "/api/sys/login" ||
 			path == "/api/sys/checkMfaCode" ||
+			path == "/api/passkey/status" ||
 			path == "/api/passkey/beginLogin" ||
 			path == "/api/passkey/finishLogin" {
 			c.Next()
