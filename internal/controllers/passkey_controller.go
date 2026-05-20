@@ -118,9 +118,8 @@ func (pc *PasskeyController) BeginRegistration(c *gin.Context) {
 
 	options, session, err := pc.webAuthn.BeginRegistration(user,
 		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
-			AuthenticatorAttachment: protocol.CrossPlatform,
-			ResidentKey:             protocol.ResidentKeyRequirementPreferred,
-			UserVerification:        protocol.VerificationPreferred,
+			ResidentKey:      protocol.ResidentKeyRequirementPreferred,
+			UserVerification: protocol.VerificationPreferred,
 		}),
 	)
 	if err != nil {

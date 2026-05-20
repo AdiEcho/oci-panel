@@ -7,10 +7,14 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM golang:1.24-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
+ARG TARGETARCH
 WORKDIR /app
 COPY . .
-RUN go mod tidy && CGO_ENABLED=0 go build -ldflags "-s -w" -o oci-panel main.go
+ENV GOPROXY=https://goproxy.cn,direct \
+    GONOSUMDB=* \
+    GONOSUMCHECK=*
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w" -o oci-panel main.go
 
 # Stage 3: Final minimal image
 FROM alpine:3.21
