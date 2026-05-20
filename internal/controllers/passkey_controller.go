@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"sync"
 
@@ -157,16 +158,12 @@ func (pc *PasskeyController) FinishRegistration(c *gin.Context) {
 		return
 	}
 
-	credentialData, err := protocol.ParseCredentialCreationResponseBody(c.Request.Body)
+	credentialData, err := protocol.ParseCredentialCreationResponse(
+		&http.Request{Body: io.NopCloser(newJSONBody(req.Credential))},
+	)
 	if err != nil {
-		parsedCred, parseErr := protocol.ParseCredentialCreationResponse(
-			&http.Request{Body: newJSONBody(req.Credential)},
-		)
-		if parseErr != nil {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "Failed to parse credential: "+err.Error()))
-			return
-		}
-		credentialData = parsedCred
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "Failed to parse credential: "+err.Error()))
+		return
 	}
 
 	user := pc.getAdminUser()
@@ -297,7 +294,7 @@ func newJSONBody(data json.RawMessage) *jsonBody {
 
 func (j *jsonBody) Read(p []byte) (n int, err error) {
 	if j.pos >= len(j.data) {
-		return 0, nil
+		return 0, io.EOF
 	}
 	n = copy(p, j.data[j.pos:])
 	j.pos += n
