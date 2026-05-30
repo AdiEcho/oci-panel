@@ -176,30 +176,9 @@ func (pc *PasskeyController) FinishRegistration(c *gin.Context) {
 	credBytes, _ := json.Marshal(credential)
 	credBase64 := base64.StdEncoding.EncodeToString(credBytes)
 
-	db := database.GetDB()
-	var credSetting models.SysSetting
-	if err := db.Where("key = ?", PasskeyCredentialKey).First(&credSetting).Error; err != nil {
-		credSetting = models.SysSetting{
-			ID:    "passkey_credential_id",
-			Key:   PasskeyCredentialKey,
-			Value: credBase64,
-		}
-		db.Create(&credSetting)
-	} else {
-		db.Model(&credSetting).Update("value", credBase64)
-	}
-
-	var enabledSetting models.SysSetting
-	if err := db.Where("key = ?", PasskeyEnabledKey).First(&enabledSetting).Error; err != nil {
-		enabledSetting = models.SysSetting{
-			ID:    "passkey_enabled_id",
-			Key:   PasskeyEnabledKey,
-			Value: "true",
-		}
-		db.Create(&enabledSetting)
-	} else {
-		db.Model(&enabledSetting).Update("value", "true")
-	}
+	// upsert：保持原有「失败静默」行为（原代码亦未检查写入错误）
+	_ = database.UpsertSysSetting(PasskeyCredentialKey, credBase64)
+	_ = database.UpsertSysSetting(PasskeyEnabledKey, "true")
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "Passkey registered successfully"))
 }

@@ -3,9 +3,18 @@ port = "8999"
 
 [web]
 account = "admin"
+# 密码：可填明文，也可填 bcrypt 哈希（以 $2a$/$2b$/$2y$ 开头）。
+# 推荐使用 bcrypt 哈希，避免明文泄露。生成方式（任选其一）：
+#   htpasswd -bnBC 12 "" 'your-password' | tr -d ':\n'
+#   或 docker run --rm httpd:alpine htpasswd -bnBC 12 "" 'your-password' | tr -d ':\n'
 password = "admin"
-# JWT signing secret - change this in production
-jwt_secret = "change-this-to-a-random-string-in-production"
+# JWT 签名密钥。留空时服务会自动生成一个随机密钥并持久化到数据库（重启后保持不变）。
+# 也可显式指定（优先级高于自动生成）。已移除此前硬编码的公开默认密钥。
+jwt_secret = ""
+# 允许跨域访问的来源白名单（精确匹配 Origin，含协议与端口）。
+# 留空表示仅允许同源访问——生产环境前端由本服务同源托管时无需配置。
+# 仅当前端与 API 部署在不同来源时才需要填写，例如：["https://panel.example.com"]
+allow_origins = []
 
 [database]
 dsn = "db/oci-helper.db"

@@ -12,12 +12,7 @@ import (
 )
 
 func (s *OCIService) GetTrafficData(ctx context.Context, user *models.OciUser, vnicId string, startTime string, endTime string) (*models.TrafficData, error) {
-	configProvider, err := s.GetConfigProvider(user)
-	if err != nil {
-		return nil, err
-	}
-
-	monitoringClient, err := monitoring.NewMonitoringClientWithConfigurationProvider(configProvider)
+	monitoringClient, err := s.GetMonitoringClient(user)
 	if err != nil {
 		return nil, err
 	}
@@ -101,22 +96,17 @@ type MonthlyTrafficStats struct {
 
 // GetMonthlyTrafficStats 获取指定配置的月度流量统计
 func (s *OCIService) GetMonthlyTrafficStats(ctx context.Context, user *models.OciUser) (*MonthlyTrafficStats, error) {
-	configProvider, err := s.GetConfigProvider(user)
+	computeClient, err := s.GetComputeClient(user)
 	if err != nil {
 		return nil, err
 	}
 
-	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
+	vnClient, err := s.GetVirtualNetworkClient(user)
 	if err != nil {
 		return nil, err
 	}
 
-	vnClient, err := core.NewVirtualNetworkClientWithConfigurationProvider(configProvider)
-	if err != nil {
-		return nil, err
-	}
-
-	monitoringClient, err := monitoring.NewMonitoringClientWithConfigurationProvider(configProvider)
+	monitoringClient, err := s.GetMonitoringClient(user)
 	if err != nil {
 		return nil, err
 	}

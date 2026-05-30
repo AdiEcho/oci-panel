@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Plus, Search, Trash2, Edit, Copy, ChevronLeft, ChevronRight, Loader2, Key } from 'lucide-vue-next'
-import api from '@/lib/api'
+import { keyApi } from '@/api'
 import { toast } from '@/composables/useToast'
-import { copyToClipboard, truncateId } from '@/lib/utils'
+import { usePagination } from '@/composables/usePagination'
+import { copyToClipboard, truncateId, debounce } from '@/lib/utils'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,9 +25,7 @@ interface KeyItem {
 
 const keys = ref<KeyItem[]>([])
 const loading = ref(false)
-const currentPage = ref(1)
-const pageSize = 10
-const totalPages = ref(0)
+const { currentPage, pageSize, totalPages, applyResult } = usePagination()
 const searchText = ref('')
 const filterType = ref('')
 
@@ -42,17 +41,14 @@ const form = ref({
 const loadKeys = async (page = 1) => {
   loading.value = true
   try {
-    const response = await api.get('/key/list', {
-      params: {
-        page,
-        pageSize,
-        name: searchText.value,
-        keyType: filterType.value
-      }
+    const response = await keyApi.list({
+      page,
+      pageSize,
+      name: searchText.value,
+      keyType: filterType.value
     })
     keys.value = response.data.list || []
-    currentPage.value = response.data.page
-    totalPages.value = Math.ceil(response.data.total / pageSize)
+    applyResult(response.data)
   } catch (error: any) {
     toast.error(error.message || '加载失败')
   } finally {
@@ -60,7 +56,7 @@ const loadKeys = async (page = 1) => {
   }
 }
 
-const handleSearch = () => loadKeys(1)
+const handleSearch = debounce(() => loadKeys(1), 300)
 
 const closeModal = () => {
   showAddModal.value = false
@@ -72,14 +68,14 @@ const submitForm = async () => {
   submitting.value = true
   try {
     if (editingKey.value) {
-      await api.post('/key/update', {
+      await keyApi.update({
         id: editingKey.value.id,
         name: form.value.name,
         publicKey: form.value.publicKey
       })
       toast.success('更新成功')
     } else {
-      await api.post('/key/create', {
+      await keyApi.create({
         name: form.value.name,
         publicKey: form.value.publicKey
       })
@@ -106,7 +102,7 @@ const editKey = (key: KeyItem) => {
 const deleteKey = async (id: number) => {
   if (!confirm('确定要删除此密钥吗？')) return
   try {
-    await api.post('/key/delete', { ids: [id] })
+    await keyApi.delete([id])
     toast.success('删除成功')
     await loadKeys(currentPage.value)
   } catch (error: any) {

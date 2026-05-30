@@ -11,6 +11,37 @@ import (
 	"github.com/oracle/oci-go-sdk/v65/networkloadbalancer"
 )
 
+// oci-panel 为受管网络负载均衡器打的 FreeformTag 标记。
+// 删除操作只针对带这些标记、且实例标签匹配的 NLB，绝不误删租户内无关的负载均衡器。
+const (
+	nlbManagedTagKey     = "oci-panel-managed"
+	nlbManagedTagValue   = "true"
+	nlbInstanceTagKey    = "oci-panel-instance"
+	nlbManagedNamePrefix = "oci-panel-nlb-"
+)
+
+// managedNlbFreeformTags 返回为指定实例创建 NLB 时应附加的 FreeformTags。
+func managedNlbFreeformTags(instanceID string) map[string]string {
+	return map[string]string{
+		nlbManagedTagKey:  nlbManagedTagValue,
+		nlbInstanceTagKey: instanceID,
+	}
+}
+
+// isManagedNlbForInstance 判断某个网络负载均衡器是否由 oci-panel 为指定实例创建。
+// 只有返回 true 的 NLB 才允许被自动删除。判定严格基于 FreeformTags：
+// 必须同时满足「受管标记为 true」且「实例标签等于该实例」，从而即使同一租户/compartment
+// 内存在其他实例的受管 NLB 或用户自建 NLB，也不会被误删。
+func isManagedNlbForInstance(freeformTags map[string]string, instanceID string) bool {
+	if freeformTags == nil {
+		return false
+	}
+	if freeformTags[nlbManagedTagKey] != nlbManagedTagValue {
+		return false
+	}
+	return freeformTags[nlbInstanceTagKey] == instanceID && instanceID != ""
+}
+
 // Check500MbpsSupport 检查实例是否支持500Mbps功能
 // 仅 VM.Standard.E2.1.Micro (AMD) 实例支持此功能
 func (s *OCIService) Check500MbpsSupport(user *models.OciUser, instanceID string) (bool, string, error) {
@@ -128,22 +159,30 @@ func (s *OCIService) Enable500Mbps(user *models.OciUser, instanceID string, sshP
 	}
 	subnetId := subnetResp.Items[0].Id
 
-	// 删除现有网络负载均衡器
+	// 删除此前由 oci-panel 为「本实例」创建的旧 NLB（按受管标签过滤），
+	// 不再像以往那样删除 compartment 内所有 active NLB（会误删其他实例/用户自建的负载均衡器）。
 	existingNlbResp, err := nlbClient.ListNetworkLoadBalancers(ctx, networkloadbalancer.ListNetworkLoadBalancersRequest{
 		CompartmentId:  &compartmentID,
 		LifecycleState: networkloadbalancer.ListNetworkLoadBalancersLifecycleStateActive,
 	})
 	if err == nil && existingNlbResp.NetworkLoadBalancerCollection.Items != nil {
+		deletedAny := false
 		for _, nlb := range existingNlbResp.NetworkLoadBalancerCollection.Items {
+			if !isManagedNlbForInstance(nlb.FreeformTags, instanceID) {
+				continue
+			}
 			_, _ = nlbClient.DeleteNetworkLoadBalancer(ctx, networkloadbalancer.DeleteNetworkLoadBalancerRequest{
 				NetworkLoadBalancerId: nlb.Id,
 			})
+			deletedAny = true
 		}
-		time.Sleep(5 * time.Second)
+		if deletedAny {
+			time.Sleep(5 * time.Second)
+		}
 	}
 
-	// 创建网络负载均衡器
-	nlbName := fmt.Sprintf("nlb-%s", time.Now().Format("20060102150405"))
+	// 创建网络负载均衡器（带 oci-panel 受管标签 + 可识别名称前缀，便于后续精确清理）
+	nlbName := fmt.Sprintf("%s%s", nlbManagedNamePrefix, time.Now().Format("20060102150405"))
 	isPrivate := false
 	port := 0
 	weight := 1
@@ -156,6 +195,7 @@ func (s *OCIService) Enable500Mbps(user *models.OciUser, instanceID string, sshP
 			DisplayName:   &nlbName,
 			SubnetId:      subnetId,
 			IsPrivate:     &isPrivate,
+			FreeformTags:  managedNlbFreeformTags(instanceID),
 			Listeners: map[string]networkloadbalancer.ListenerDetails{
 				"listener1": {
 					Name:                  stringPtr("listener1"),
@@ -436,13 +476,18 @@ func (s *OCIService) Disable500Mbps(user *models.OciUser, instanceID string, ret
 		}
 	}
 
-	// 删除网络负载均衡器
+	// 删除网络负载均衡器：只删除由 oci-panel 为「本实例」创建的 NLB（按受管标签精确过滤）。
+	// 此前实现用仅含 CompartmentId 的 List 然后删除「全部」结果，会误删该 compartment 内
+	// 与本功能无关的负载均衡器，属数据丢失级 bug。
 	if !retainNlb {
 		nlbResp, _ := nlbClient.ListNetworkLoadBalancers(ctx, networkloadbalancer.ListNetworkLoadBalancersRequest{
 			CompartmentId: &compartmentID,
 		})
 		if nlbResp.NetworkLoadBalancerCollection.Items != nil {
 			for _, nlb := range nlbResp.NetworkLoadBalancerCollection.Items {
+				if !isManagedNlbForInstance(nlb.FreeformTags, instanceID) {
+					continue
+				}
 				_, _ = nlbClient.DeleteNetworkLoadBalancer(ctx, networkloadbalancer.DeleteNetworkLoadBalancerRequest{
 					NetworkLoadBalancerId: nlb.Id,
 				})

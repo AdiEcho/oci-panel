@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/adiecho/oci-panel/internal/models"
@@ -16,16 +17,17 @@ func (s *OCIService) ListInstances(ctx context.Context, user *models.OciUser, co
 		return nil, err
 	}
 
-	req := core.ListInstancesRequest{
-		CompartmentId: &compartmentId,
-	}
-
-	resp, err := client.ListInstances(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Items, nil
+	// 全量分页：此前只取首页、忽略 OpcNextPage，实例较多时结果被截断。
+	return paginate(func(page *string) ([]core.Instance, *string, error) {
+		resp, err := client.ListInstances(ctx, core.ListInstancesRequest{
+			CompartmentId: &compartmentId,
+			Page:          page,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return resp.Items, resp.OpcNextPage, nil
+	})
 }
 
 func (s *OCIService) GetInstance(ctx context.Context, user *models.OciUser, instanceId string) (*core.Instance, error) {
@@ -227,17 +229,15 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 			if err != nil {
 				return fmt.Errorf("创建VCN失败: %w", err)
 			}
-			for i := 0; i < 30; i++ {
-				getVcnResp, err := vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: createVcnResp.Id})
-				if err == nil && getVcnResp.LifecycleState == core.VcnLifecycleStateAvailable {
-					targetVcn = &getVcnResp.Vcn
-					break
-				}
-				time.Sleep(time.Second)
-			}
-			if targetVcn == nil {
+			vcnResp, ok := waitForState(30, time.Second,
+				func() (core.GetVcnResponse, error) {
+					return vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: createVcnResp.Id})
+				},
+				func(r core.GetVcnResponse) bool { return r.LifecycleState == core.VcnLifecycleStateAvailable })
+			if !ok {
 				return fmt.Errorf("等待VCN创建超时")
 			}
+			targetVcn = &vcnResp.Vcn
 		} else {
 			if len(targetVcn.CidrBlocks) > 0 {
 				cidrBlock = targetVcn.CidrBlocks[0]
@@ -267,17 +267,17 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 			if err != nil {
 				return fmt.Errorf("创建Internet网关失败: %w", err)
 			}
-			for i := 0; i < 30; i++ {
-				getIgwResp, err := vnClient.GetInternetGateway(ctx, core.GetInternetGatewayRequest{IgId: createIgwResp.Id})
-				if err == nil && getIgwResp.LifecycleState == core.InternetGatewayLifecycleStateAvailable {
-					internetGatewayId = createIgwResp.Id
-					break
-				}
-				time.Sleep(time.Second)
-			}
-			if internetGatewayId == nil {
+			_, ok := waitForState(30, time.Second,
+				func() (core.GetInternetGatewayResponse, error) {
+					return vnClient.GetInternetGateway(ctx, core.GetInternetGatewayRequest{IgId: createIgwResp.Id})
+				},
+				func(r core.GetInternetGatewayResponse) bool {
+					return r.LifecycleState == core.InternetGatewayLifecycleStateAvailable
+				})
+			if !ok {
 				return fmt.Errorf("等待Internet网关创建超时")
 			}
+			internetGatewayId = createIgwResp.Id
 		} else {
 			internetGatewayId = igwResp.Items[0].Id
 		}
@@ -328,17 +328,15 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		if err != nil {
 			return fmt.Errorf("创建子网失败: %w", err)
 		}
-		for i := 0; i < 30; i++ {
-			getSubnetResp, err := vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: createSubnetResp.Id})
-			if err == nil && getSubnetResp.LifecycleState == core.SubnetLifecycleStateAvailable {
-				subnetId = *createSubnetResp.Id
-				break
-			}
-			time.Sleep(time.Second)
-		}
-		if subnetId == "" {
+		_, ok := waitForState(30, time.Second,
+			func() (core.GetSubnetResponse, error) {
+				return vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: createSubnetResp.Id})
+			},
+			func(r core.GetSubnetResponse) bool { return r.LifecycleState == core.SubnetLifecycleStateAvailable })
+		if !ok {
 			return fmt.Errorf("等待子网创建超时")
 		}
+		subnetId = *createSubnetResp.Id
 	}
 
 	shape := "VM.Standard.A1.Flex"
@@ -435,91 +433,173 @@ func (s *OCIService) GetInstanceDetails(ctx context.Context, user *models.OciUse
 		}
 	}
 
+	// 此前这里是串行的 N+1：GetImage → ListBootVolumeAttachments+GetBootVolume →
+	// ListVnicAttachments + 每 VNIC(GetVnic+ListIpv6s)。这三组互不依赖，且每个 VNIC 的查询也互不依赖，
+	// 故并发执行。注意：各分支写入的是 info 的「不同字段」（ImageName / BootVolume* / Vnic*），
+	// 每个 VNIC 写入 results 的「不同下标」，均为不同内存地址，无数据竞争；
+	// VnicList 等切片的最终汇总只在 VNIC 分支内串行进行（单一写者）。
+	var wg sync.WaitGroup
+
+	// 分支 1：镜像名
 	if instance.SourceDetails != nil {
-		switch sourceDetails := instance.SourceDetails.(type) {
-		case core.InstanceSourceViaImageDetails:
-			if sourceDetails.ImageId != nil {
-				imageReq := core.GetImageRequest{ImageId: sourceDetails.ImageId}
-				imageResp, err := computeClient.GetImage(ctx, imageReq)
+		if sourceDetails, ok := instance.SourceDetails.(core.InstanceSourceViaImageDetails); ok && sourceDetails.ImageId != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				imageResp, err := computeClient.GetImage(ctx, core.GetImageRequest{ImageId: sourceDetails.ImageId})
 				if err == nil && imageResp.DisplayName != nil {
 					info.ImageName = *imageResp.DisplayName
 				}
-			}
+			}()
 		}
 	}
 
-	bootVolumeClient, err := s.GetBlockstorageClient(user)
-	if err == nil {
-		bootVolumeReq := core.ListBootVolumeAttachmentsRequest{
+	// 分支 2：引导卷大小/VPU
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		bootVolumeClient, err := s.GetBlockstorageClient(user)
+		if err != nil {
+			return
+		}
+		bootVolumeResp, err := computeClient.ListBootVolumeAttachments(ctx, core.ListBootVolumeAttachmentsRequest{
 			CompartmentId:      instance.CompartmentId,
 			InstanceId:         instance.Id,
 			AvailabilityDomain: instance.AvailabilityDomain,
+		})
+		if err != nil || len(bootVolumeResp.Items) == 0 {
+			return
 		}
-		bootVolumeResp, err := computeClient.ListBootVolumeAttachments(ctx, bootVolumeReq)
-		if err == nil && len(bootVolumeResp.Items) > 0 {
-			bvId := bootVolumeResp.Items[0].BootVolumeId
-			if bvId != nil {
-				bvReq := core.GetBootVolumeRequest{BootVolumeId: bvId}
-				bvResp, err := bootVolumeClient.GetBootVolume(ctx, bvReq)
-				if err == nil {
-					if bvResp.SizeInGBs != nil {
-						info.BootVolumeSize = *bvResp.SizeInGBs
-					}
-					if bvResp.VpusPerGB != nil {
-						info.BootVolumeVpu = *bvResp.VpusPerGB
-					}
-				}
-			}
+		bvId := bootVolumeResp.Items[0].BootVolumeId
+		if bvId == nil {
+			return
 		}
-	}
+		bvResp, err := bootVolumeClient.GetBootVolume(ctx, core.GetBootVolumeRequest{BootVolumeId: bvId})
+		if err != nil {
+			return
+		}
+		if bvResp.SizeInGBs != nil {
+			info.BootVolumeSize = *bvResp.SizeInGBs
+		}
+		if bvResp.VpusPerGB != nil {
+			info.BootVolumeVpu = *bvResp.VpusPerGB
+		}
+	}()
 
-	listVnicReq := core.ListVnicAttachmentsRequest{
-		CompartmentId: instance.CompartmentId,
-		InstanceId:    instance.Id,
-	}
-	vnicResp, err := computeClient.ListVnicAttachments(ctx, listVnicReq)
-	if err == nil {
+	// 分支 3：VNIC 列表（每个 VNIC 的 GetVnic + ListIpv6s 并发，按附件顺序稳定汇总）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vnicResp, err := computeClient.ListVnicAttachments(ctx, core.ListVnicAttachmentsRequest{
+			CompartmentId: instance.CompartmentId,
+			InstanceId:    instance.Id,
+		})
+		if err != nil {
+			return
+		}
 		vnClient, err := s.GetVirtualNetworkClient(user)
-		if err == nil {
-			for _, vnicAttachment := range vnicResp.Items {
-				if vnicAttachment.VnicId != nil {
-					vnicReq := core.GetVnicRequest{VnicId: vnicAttachment.VnicId}
-					vnic, err := vnClient.GetVnic(ctx, vnicReq)
-					if err == nil {
-						vnicInfo := models.VnicInfo{
-							VnicID: *vnicAttachment.VnicId,
-						}
-						if vnic.DisplayName != nil {
-							vnicInfo.Name = *vnic.DisplayName
-						}
-						if vnic.SubnetId != nil {
-							vnicInfo.SubnetID = *vnic.SubnetId
-						}
-						if vnic.PublicIp != nil && *vnic.PublicIp != "" {
-							vnicInfo.PublicIP = *vnic.PublicIp
-							info.PublicIPs = append(info.PublicIPs, *vnic.PublicIp)
-						}
-						if vnic.PrivateIp != nil && *vnic.PrivateIp != "" {
-							vnicInfo.PrivateIP = *vnic.PrivateIp
-							info.PrivateIPs = append(info.PrivateIPs, *vnic.PrivateIp)
-						}
-						info.VnicList = append(info.VnicList, vnicInfo)
+		if err != nil {
+			return
+		}
 
-						ipv6Req := core.ListIpv6sRequest{VnicId: vnicAttachment.VnicId}
-						ipv6Resp, err := vnClient.ListIpv6s(ctx, ipv6Req)
-						if err == nil && len(ipv6Resp.Items) > 0 {
-							if ipv6Resp.Items[0].IpAddress != nil {
-								info.IPv6 = *ipv6Resp.Items[0].IpAddress
-							}
-						}
+		type vnicResult struct {
+			info  models.VnicInfo
+			ipv6  string
+			valid bool
+		}
+		results := make([]vnicResult, len(vnicResp.Items))
+		var vwg sync.WaitGroup
+		for i, vnicAttachment := range vnicResp.Items {
+			if vnicAttachment.VnicId == nil {
+				continue
+			}
+			vwg.Add(1)
+			go func(idx int, vnicID *string) {
+				defer vwg.Done()
+				vnic, err := vnClient.GetVnic(ctx, core.GetVnicRequest{VnicId: vnicID})
+				if err != nil {
+					return
+				}
+				r := vnicResult{valid: true}
+				r.info.VnicID = *vnicID
+				if vnic.DisplayName != nil {
+					r.info.Name = *vnic.DisplayName
+				}
+				if vnic.SubnetId != nil {
+					r.info.SubnetID = *vnic.SubnetId
+				}
+				if vnic.PublicIp != nil && *vnic.PublicIp != "" {
+					r.info.PublicIP = *vnic.PublicIp
+				}
+				if vnic.PrivateIp != nil && *vnic.PrivateIp != "" {
+					r.info.PrivateIP = *vnic.PrivateIp
+				}
+				if ipv6Resp, err := vnClient.ListIpv6s(ctx, core.ListIpv6sRequest{VnicId: vnicID}); err == nil && len(ipv6Resp.Items) > 0 {
+					if ipv6Resp.Items[0].IpAddress != nil {
+						r.ipv6 = *ipv6Resp.Items[0].IpAddress
 					}
 				}
+				results[idx] = r
+			}(i, vnicAttachment.VnicId)
+		}
+		vwg.Wait()
+
+		// 按原始顺序汇总（仅本 goroutine 写这些字段）
+		for _, r := range results {
+			if !r.valid {
+				continue
+			}
+			info.VnicList = append(info.VnicList, r.info)
+			if r.info.PublicIP != "" {
+				info.PublicIPs = append(info.PublicIPs, r.info.PublicIP)
+			}
+			if r.info.PrivateIP != "" {
+				info.PrivateIPs = append(info.PrivateIPs, r.info.PrivateIP)
+			}
+			if info.IPv6 == "" && r.ipv6 != "" {
+				info.IPv6 = r.ipv6
 			}
 		}
-	}
+	}()
 
+	wg.Wait()
 	return info, nil
 }
+
+// GetInstancesDetailsConcurrent 并发获取多个实例的详情（并发上限 instanceDetailConcurrency），
+// 结果保持与输入实例相同的顺序，获取失败的实例被跳过（与此前 `if err == nil` 行为一致）。
+// 替代调用方按实例串行调用 GetInstanceDetails 的 N×(6~8) 往返模式。
+func (s *OCIService) GetInstancesDetailsConcurrent(ctx context.Context, user *models.OciUser, instances []core.Instance) []models.InstanceInfo {
+	results := make([]*models.InstanceInfo, len(instances))
+	sem := make(chan struct{}, instanceDetailConcurrency)
+	var wg sync.WaitGroup
+	for i, inst := range instances {
+		if inst.Id == nil {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, instanceID string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if detail, err := s.GetInstanceDetails(ctx, user, instanceID); err == nil {
+				results[idx] = detail
+			}
+		}(i, *inst.Id)
+	}
+	wg.Wait()
+
+	infos := make([]models.InstanceInfo, 0, len(instances))
+	for _, r := range results {
+		if r != nil {
+			infos = append(infos, *r)
+		}
+	}
+	return infos
+}
+
+// instanceDetailConcurrency 限制同时获取实例详情的数量，避免对 OCI API 造成过高并发（触发限流）。
+const instanceDetailConcurrency = 6
 
 func (s *OCIService) GetInstanceById(user *models.OciUser, instanceID string) (*core.Instance, error) {
 	ctx := context.Background()

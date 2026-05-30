@@ -8,7 +8,8 @@ import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import api from '@/lib/api'
+import { passkeyApi } from '@/api'
+import { getPasskeyCredential } from '@/lib/webauthn'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -47,7 +48,7 @@ useMotion(cardRef, {
 
 onMounted(async () => {
   try {
-    const res = await api.get('/passkey/status')
+    const res = await passkeyApi.status()
     if (res.data?.enabled) {
       loginMode.value = 'passkey'
       passkeyEnabled.value = true
@@ -107,35 +108,9 @@ const handlePasskeyLogin = async () => {
   verifyingPasskey.value = true
 
   try {
-    const beginResponse = await api.post('/passkey/beginLogin', {})
-    const options = beginResponse.data
-
-    const credential = (await navigator.credentials.get({
-      publicKey: {
-        ...options.publicKey,
-        challenge: base64ToArrayBuffer(options.publicKey.challenge),
-        allowCredentials:
-          options.publicKey.allowCredentials?.map((c: any) => ({
-            ...c,
-            id: base64ToArrayBuffer(c.id)
-          })) || []
-      }
-    })) as PublicKeyCredential
-
-    const assertionResponse = credential.response as AuthenticatorAssertionResponse
-    const credentialData = {
-      id: credential.id,
-      rawId: arrayBufferToBase64(credential.rawId),
-      type: credential.type,
-      response: {
-        clientDataJSON: arrayBufferToBase64(assertionResponse.clientDataJSON),
-        authenticatorData: arrayBufferToBase64(assertionResponse.authenticatorData),
-        signature: arrayBufferToBase64(assertionResponse.signature),
-        userHandle: assertionResponse.userHandle ? arrayBufferToBase64(assertionResponse.userHandle) : null
-      }
-    }
-
-    const finishResponse = await api.post('/passkey/finishLogin', { credential: credentialData })
+    const beginResponse = await passkeyApi.beginLogin()
+    const credentialData = await getPasskeyCredential(beginResponse.data.publicKey)
+    const finishResponse = await passkeyApi.finishLogin(credentialData)
     authStore.setToken(finishResponse.data.token, finishResponse.data.username)
     toast.success('登录成功')
     router.push('/')
@@ -149,24 +124,6 @@ const handlePasskeyLogin = async () => {
   } finally {
     verifyingPasskey.value = false
   }
-}
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
-  return bytes.buffer
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
 const switchToPassword = () => {

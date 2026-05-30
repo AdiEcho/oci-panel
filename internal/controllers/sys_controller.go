@@ -47,7 +47,11 @@ func (sc *SysController) Login(c *gin.Context) {
 		return
 	}
 
-	if req.Account != sc.cfg.Web.Account || req.Password != sc.cfg.Web.Password {
+	// 常量时间比较账号 + 支持 bcrypt 的密码校验；两个判断都先求值再合并，
+	// 避免账号错误时提前返回造成的时序侧信道。
+	accountOK := middleware.SecureCompareString(req.Account, sc.cfg.Web.Account)
+	passwordOK := middleware.VerifyPassword(sc.cfg.Web.Password, req.Password)
+	if !accountOK || !passwordOK {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse(401, "Invalid credentials"))
 		return
 	}
@@ -243,31 +247,9 @@ func (sc *SysController) EnableMfa(c *gin.Context) {
 		return
 	}
 
-	db := database.GetDB()
-
-	var secretSetting models.SysSetting
-	if err := db.Where("key = ?", MfaSecretKey).First(&secretSetting).Error; err != nil {
-		secretSetting = models.SysSetting{
-			ID:    "mfa_secret_id",
-			Key:   MfaSecretKey,
-			Value: req.Secret,
-		}
-		db.Create(&secretSetting)
-	} else {
-		db.Model(&secretSetting).Update("value", req.Secret)
-	}
-
-	var enabledSetting models.SysSetting
-	if err := db.Where("key = ?", MfaEnabledKey).First(&enabledSetting).Error; err != nil {
-		enabledSetting = models.SysSetting{
-			ID:    "mfa_enabled_id",
-			Key:   MfaEnabledKey,
-			Value: "true",
-		}
-		db.Create(&enabledSetting)
-	} else {
-		db.Model(&enabledSetting).Update("value", "true")
-	}
+	// upsert：保持原有「失败静默」行为（原代码亦未检查写入错误）
+	_ = database.UpsertSysSetting(MfaSecretKey, req.Secret)
+	_ = database.UpsertSysSetting(MfaEnabledKey, "true")
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "MFA enabled successfully"))
 }

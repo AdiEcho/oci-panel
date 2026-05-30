@@ -15,17 +15,23 @@ func (s *OCIService) ListVCNs(ctx context.Context, user *models.OciUser, compart
 		return nil, err
 	}
 
-	req := core.ListVcnsRequest{
-		CompartmentId: &compartmentId,
-	}
-
-	resp, err := client.ListVcns(ctx, req)
+	// 全量分页：消除只取首页导致的 VCN 截断。
+	vcnItems, err := paginate(func(page *string) ([]core.Vcn, *string, error) {
+		resp, err := client.ListVcns(ctx, core.ListVcnsRequest{
+			CompartmentId: &compartmentId,
+			Page:          page,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return resp.Items, resp.OpcNextPage, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	vcns := make([]models.VCNInfo, 0)
-	for _, vcn := range resp.Items {
+	vcns := make([]models.VCNInfo, 0, len(vcnItems))
+	for _, vcn := range vcnItems {
 		vcnInfo := models.VCNInfo{
 			ID:          *vcn.Id,
 			DisplayName: *vcn.DisplayName,
@@ -40,33 +46,38 @@ func (s *OCIService) ListVCNs(ctx context.Context, user *models.OciUser, compart
 			vcnInfo.CreateTime = vcn.TimeCreated.Format("2006-01-02 15:04:05")
 		}
 
-		// 获取子网列表
-		subnetReq := core.ListSubnetsRequest{
-			CompartmentId: &compartmentId,
-			VcnId:         vcn.Id,
-		}
-		subnetResp, err := client.ListSubnets(ctx, subnetReq)
-		if err == nil {
-			for _, subnet := range subnetResp.Items {
-				subnetInfo := models.SubnetInfo{
-					ID:    *subnet.Id,
-					State: string(subnet.LifecycleState),
-				}
-				if subnet.DisplayName != nil {
-					subnetInfo.DisplayName = *subnet.DisplayName
-				}
-				// 使用 Ipv4CidrBlocks 替代已弃用的 CidrBlock
-				if len(subnet.Ipv4CidrBlocks) > 0 {
-					subnetInfo.CIDRBlock = subnet.Ipv4CidrBlocks[0]
-				}
-				if subnet.AvailabilityDomain != nil {
-					subnetInfo.AvailabilityDomain = *subnet.AvailabilityDomain
-				}
-				if subnet.ProhibitPublicIpOnVnic != nil {
-					subnetInfo.IsPublic = !*subnet.ProhibitPublicIpOnVnic
-				}
-				vcnInfo.Subnets = append(vcnInfo.Subnets, subnetInfo)
+		// 获取子网列表（全量分页）
+		vcnID := vcn.Id
+		subnets, _ := paginate(func(page *string) ([]core.Subnet, *string, error) {
+			resp, err := client.ListSubnets(ctx, core.ListSubnetsRequest{
+				CompartmentId: &compartmentId,
+				VcnId:         vcnID,
+				Page:          page,
+			})
+			if err != nil {
+				return nil, nil, err
 			}
+			return resp.Items, resp.OpcNextPage, nil
+		})
+		for _, subnet := range subnets {
+			subnetInfo := models.SubnetInfo{
+				ID:    *subnet.Id,
+				State: string(subnet.LifecycleState),
+			}
+			if subnet.DisplayName != nil {
+				subnetInfo.DisplayName = *subnet.DisplayName
+			}
+			// 使用 Ipv4CidrBlocks 替代已弃用的 CidrBlock
+			if len(subnet.Ipv4CidrBlocks) > 0 {
+				subnetInfo.CIDRBlock = subnet.Ipv4CidrBlocks[0]
+			}
+			if subnet.AvailabilityDomain != nil {
+				subnetInfo.AvailabilityDomain = *subnet.AvailabilityDomain
+			}
+			if subnet.ProhibitPublicIpOnVnic != nil {
+				subnetInfo.IsPublic = !*subnet.ProhibitPublicIpOnVnic
+			}
+			vcnInfo.Subnets = append(vcnInfo.Subnets, subnetInfo)
 		}
 
 		vcns = append(vcns, vcnInfo)

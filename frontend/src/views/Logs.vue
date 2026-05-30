@@ -2,6 +2,7 @@
 import { ref, onUnmounted, nextTick } from 'vue'
 import { Wifi, WifiOff, Trash2, Terminal } from 'lucide-vue-next'
 import { toast } from '@/composables/useToast'
+import { useAuthStore } from '@/stores/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,10 +12,15 @@ interface LogEntry {
   type: 'info' | 'error' | 'warning' | 'success'
 }
 
+const authStore = useAuthStore()
 const logs = ref<LogEntry[]>([])
 const isConnected = ref(false)
 const ws = ref<WebSocket | null>(null)
 const logConsole = ref<HTMLElement>()
+
+// 日志缓冲上限：实时日志流可能无限增长，超过上限后丢弃最旧的条目，
+// 避免 DOM 节点与内存无界膨胀导致页面卡顿。
+const MAX_LOG_ENTRIES = 1000
 
 const addLog = (message: string, type: LogEntry['type'] = 'info') => {
   const timestamp = new Date().toLocaleTimeString('zh-CN')
@@ -22,6 +28,9 @@ const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     message: `[${timestamp}] ${message}`,
     type
   })
+  if (logs.value.length > MAX_LOG_ENTRIES) {
+    logs.value.splice(0, logs.value.length - MAX_LOG_ENTRIES)
+  }
 
   nextTick(() => {
     if (logConsole.value) {
@@ -32,7 +41,14 @@ const addLog = (message: string, type: LogEntry['type'] = 'info') => {
 
 const connectWebSocket = () => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/ws/logs`
+  // 浏览器无法为 WebSocket 设置 Authorization 头，故 token 通过查询参数传递，
+  // 后端在升级连接前校验该 token（/ws/logs 不再是未鉴权的开放日志流）。
+  const token = authStore.token
+  if (!token) {
+    toast.error('未登录，无法连接日志流')
+    return
+  }
+  const wsUrl = `${protocol}//${window.location.host}/ws/logs?token=${encodeURIComponent(token)}`
 
   try {
     ws.value = new WebSocket(wsUrl)
@@ -153,15 +169,7 @@ onUnmounted(() => {
       </CardHeader>
       <CardContent class="p-0">
         <div ref="logConsole" class="bg-background rounded-b-lg p-4 h-[600px] overflow-y-auto font-mono text-sm">
-          <div
-            v-for="(log, index) in logs"
-            :key="index"
-            v-motion
-            :initial="{ opacity: 0, x: -10 }"
-            :enter="{ opacity: 1, x: 0 }"
-            class="mb-1 leading-relaxed"
-            :class="getLogColor(log.type)"
-          >
+          <div v-for="(log, index) in logs" :key="index" class="mb-1 leading-relaxed" :class="getLogColor(log.type)">
             {{ log.message }}
           </div>
           <div v-if="!logs.length" class="text-muted-foreground text-center py-8">

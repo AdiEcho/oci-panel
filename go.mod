@@ -12,6 +12,7 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.105.0
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pquerna/otp v1.5.0
+	golang.org/x/crypto v0.45.0
 	gorm.io/gorm v1.31.1
 )
 
@@ -53,7 +54,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	golang.org/x/arch v0.23.0 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect

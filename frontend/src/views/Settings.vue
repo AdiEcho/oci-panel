@@ -22,7 +22,8 @@ import {
   KeyRound,
   Trash2
 } from 'lucide-vue-next'
-import api from '@/lib/api'
+import { sysApi, telegramApi, passkeyApi } from '@/api'
+import { createPasskeyCredential } from '@/lib/webauthn'
 import { toast } from '@/composables/useToast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -73,7 +74,7 @@ const registeringPasskey = ref(false)
 const loadConfig = async () => {
   loading.value = true
   try {
-    const response = await api.get('/sys/getSysCfg')
+    const response = await sysApi.getSysCfg()
     if (response.data) {
       config.value = response.data
       cacheConfig.value.cacheEnabled = response.data.cacheEnabled || false
@@ -88,7 +89,7 @@ const loadConfig = async () => {
 
 const updateCacheConfig = async () => {
   try {
-    await api.post('/sys/updateCacheCfg', {
+    await sysApi.updateCacheCfg({
       cacheEnabled: cacheConfig.value.cacheEnabled,
       cacheInterval: cacheConfig.value.cacheInterval
     })
@@ -101,7 +102,7 @@ const updateCacheConfig = async () => {
 const refreshCache = async () => {
   refreshing.value = true
   try {
-    await api.post('/sys/refreshCache', {})
+    await sysApi.refreshCache()
     toast.success('缓存刷新任务已启动')
   } catch {
     toast.error('刷新缓存失败')
@@ -113,7 +114,7 @@ const refreshCache = async () => {
 const loadTelegramConfig = async () => {
   telegramLoading.value = true
   try {
-    const response = await api.get('/telegram/getConfig')
+    const response = await telegramApi.getConfig()
     if (response.data) {
       telegramConfig.value = response.data
     }
@@ -126,7 +127,7 @@ const loadTelegramConfig = async () => {
 
 const updateTelegramConfig = async () => {
   try {
-    await api.post('/telegram/updateConfig', {
+    await telegramApi.updateConfig({
       botToken: telegramConfig.value.botToken,
       chatId: telegramConfig.value.chatId,
       enabled: telegramConfig.value.enabled
@@ -141,7 +142,7 @@ const updateTelegramConfig = async () => {
 const testTelegramConnection = async () => {
   testingConnection.value = true
   try {
-    await api.post('/telegram/testConnection', {})
+    await telegramApi.testConnection()
     toast.success('连接测试成功')
   } catch {
     toast.error('连接测试失败，请检查 Bot Token')
@@ -153,7 +154,7 @@ const testTelegramConnection = async () => {
 const sendTelegramTestMessage = async () => {
   sendingTestMessage.value = true
   try {
-    await api.post('/telegram/sendTestMessage', {})
+    await telegramApi.sendTestMessage()
     toast.success('测试消息发送成功')
   } catch {
     toast.error('发送测试消息失败')
@@ -164,7 +165,7 @@ const sendTelegramTestMessage = async () => {
 
 const startTelegramBot = async () => {
   try {
-    await api.post('/telegram/startBot', {})
+    await telegramApi.startBot()
     toast.success('Telegram Bot 已启动')
     await loadTelegramConfig()
   } catch {
@@ -174,7 +175,7 @@ const startTelegramBot = async () => {
 
 const stopTelegramBot = async () => {
   try {
-    await api.post('/telegram/stopBot', {})
+    await telegramApi.stopBot()
     toast.success('Telegram Bot 已停止')
     await loadTelegramConfig()
   } catch {
@@ -186,7 +187,7 @@ const loadAuthStatus = async () => {
   mfaLoading.value = true
   passkeyLoading.value = true
   try {
-    const response = await api.get('/sys/getAuthStatus')
+    const response = await sysApi.getAuthStatus()
     if (response.data) {
       mfaConfig.value.enabled = response.data.mfaEnabled
       passkeyConfig.value.enabled = response.data.passkeyEnabled
@@ -202,7 +203,7 @@ const loadAuthStatus = async () => {
 const toggleMfaSetup = async () => {
   if (mfaConfig.value.enabled) {
     try {
-      await api.post('/sys/disableMfa', {})
+      await sysApi.disableMfa()
       mfaConfig.value.enabled = false
       mfaConfig.value.secret = ''
       mfaConfig.value.qrCode = ''
@@ -218,7 +219,7 @@ const toggleMfaSetup = async () => {
     }
     showMfaSetup.value = true
     try {
-      const response = await api.post('/sys/generateMfaSecret', {})
+      const response = await sysApi.generateMfaSecret()
       if (response.data) {
         mfaConfig.value.secret = response.data.secret
         mfaConfig.value.qrCode = response.data.qrCode
@@ -244,7 +245,7 @@ const enableMfa = async () => {
   }
   enablingMfa.value = true
   try {
-    await api.post('/sys/enableMfa', {
+    await sysApi.enableMfa({
       secret: mfaConfig.value.secret,
       code: mfaCode.value
     })
@@ -266,37 +267,9 @@ const registerPasskey = async () => {
   }
   registeringPasskey.value = true
   try {
-    const beginResponse = await api.post('/passkey/beginRegistration', {})
-    const options = beginResponse.data
-
-    const credential = (await navigator.credentials.create({
-      publicKey: {
-        ...options.publicKey,
-        challenge: base64ToArrayBuffer(options.publicKey.challenge),
-        user: {
-          ...options.publicKey.user,
-          id: base64ToArrayBuffer(options.publicKey.user.id)
-        },
-        excludeCredentials:
-          options.publicKey.excludeCredentials?.map((c: any) => ({
-            ...c,
-            id: base64ToArrayBuffer(c.id)
-          })) || []
-      }
-    })) as PublicKeyCredential
-
-    const attestationResponse = credential.response as AuthenticatorAttestationResponse
-    const credentialData = {
-      id: credential.id,
-      rawId: arrayBufferToBase64(credential.rawId),
-      type: credential.type,
-      response: {
-        clientDataJSON: arrayBufferToBase64(attestationResponse.clientDataJSON),
-        attestationObject: arrayBufferToBase64(attestationResponse.attestationObject)
-      }
-    }
-
-    await api.post('/passkey/finishRegistration', { credential: credentialData })
+    const beginResponse = await passkeyApi.beginRegistration()
+    const credentialData = await createPasskeyCredential(beginResponse.data.publicKey)
+    await passkeyApi.finishRegistration(credentialData)
     passkeyConfig.value.enabled = true
     toast.success('Passkey 注册成功')
   } catch (err: any) {
@@ -312,30 +285,12 @@ const registerPasskey = async () => {
 
 const disablePasskey = async () => {
   try {
-    await api.post('/passkey/disable', {})
+    await passkeyApi.disable()
     passkeyConfig.value.enabled = false
     toast.success('Passkey 已禁用')
   } catch {
     toast.error('禁用 Passkey 失败')
   }
-}
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
-  return bytes.buffer
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
 onMounted(() => {

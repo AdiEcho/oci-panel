@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Play, Square, Trash2, FileText, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-vue-next'
-import api from '@/lib/api'
+import { taskApi } from '@/api'
 import { toast } from '@/composables/useToast'
+import { useSelection } from '@/composables/useSelection'
+import { usePagination } from '@/composables/usePagination'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,19 +39,28 @@ interface TaskLog {
 
 const tasks = ref<Task[]>([])
 const loading = ref(false)
-const currentPage = ref(1)
-const pageSize = 10
-const totalPages = ref(0)
+const { currentPage, pageSize, totalPages, applyResult } = usePagination()
 const statusFilter = ref('')
-const selectedTaskIds = ref<number[]>([])
+const {
+  selectedIds: selectedTaskIds,
+  isAllSelected,
+  isIndeterminate,
+  toggle: toggleSelectTask,
+  toggleAll: toggleSelectAll,
+  clear: clearSelection
+} = useSelection(tasks, t => t.id)
 const actionLoading = ref<Record<number, boolean>>({})
 
 const showLogsModal = ref(false)
 const currentTask = ref<Task | null>(null)
 const logs = ref<TaskLog[]>([])
 const logsLoading = ref(false)
-const logsPage = ref(1)
-const logsTotalPages = ref(0)
+const {
+  currentPage: logsPage,
+  pageSize: logsPageSize,
+  totalPages: logsTotalPages,
+  applyResult: applyLogsResult
+} = usePagination(20)
 
 const statusMap: Record<string, string> = {
   running: '运行中',
@@ -73,23 +84,16 @@ const statusVariant = (status: string) => {
   }
 }
 
-const isAllSelected = computed(() => tasks.value.length > 0 && selectedTaskIds.value.length === tasks.value.length)
-
-const isIndeterminate = computed(
-  () => selectedTaskIds.value.length > 0 && selectedTaskIds.value.length < tasks.value.length
-)
-
 const loadTasks = async (page = 1) => {
   loading.value = true
   try {
-    const response = await api.post('/task/list', {
+    const response = await taskApi.list({
       page,
       pageSize,
       status: statusFilter.value
     })
     tasks.value = response.data.list || []
-    currentPage.value = response.data.page
-    totalPages.value = Math.ceil(response.data.total / pageSize)
+    applyResult(response.data)
   } catch (error: any) {
     toast.error(error.message || '加载失败')
   } finally {
@@ -97,27 +101,10 @@ const loadTasks = async (page = 1) => {
   }
 }
 
-const toggleSelectTask = (id: number) => {
-  const index = selectedTaskIds.value.indexOf(id)
-  if (index === -1) {
-    selectedTaskIds.value.push(id)
-  } else {
-    selectedTaskIds.value.splice(index, 1)
-  }
-}
-
-const toggleSelectAll = () => {
-  if (isAllSelected.value) {
-    selectedTaskIds.value = []
-  } else {
-    selectedTaskIds.value = tasks.value.map(t => t.id)
-  }
-}
-
 const startTask = async (taskId: number) => {
   actionLoading.value[taskId] = true
   try {
-    await api.post('/task/start', { taskId })
+    await taskApi.start(taskId)
     toast.success('任务已启动')
     await loadTasks(currentPage.value)
   } catch (error: any) {
@@ -130,7 +117,7 @@ const startTask = async (taskId: number) => {
 const stopTask = async (taskId: number) => {
   actionLoading.value[taskId] = true
   try {
-    await api.post('/task/stop', { taskId })
+    await taskApi.stop(taskId)
     toast.success('任务已停止')
     await loadTasks(currentPage.value)
   } catch (error: any) {
@@ -144,7 +131,7 @@ const deleteTask = async (taskId: number) => {
   if (!confirm('确定要删除此任务吗？相关日志也将被删除。')) return
   actionLoading.value[taskId] = true
   try {
-    await api.post('/task/delete', { taskId })
+    await taskApi.delete(taskId)
     toast.success('任务已删除')
     await loadTasks(currentPage.value)
   } catch (error: any) {
@@ -157,9 +144,9 @@ const deleteTask = async (taskId: number) => {
 const batchDeleteTasks = async () => {
   if (!confirm(`确定要删除选中的 ${selectedTaskIds.value.length} 个任务吗？`)) return
   try {
-    await api.post('/task/batchDelete', { taskIds: selectedTaskIds.value })
+    await taskApi.batchDelete(selectedTaskIds.value)
     toast.success(`成功删除 ${selectedTaskIds.value.length} 个任务`)
-    selectedTaskIds.value = []
+    clearSelection()
     await loadTasks(currentPage.value)
   } catch (error: any) {
     toast.error(error.message || '批量删除失败')
@@ -177,14 +164,13 @@ const loadLogs = async (page = 1) => {
   if (!currentTask.value) return
   logsLoading.value = true
   try {
-    const response = await api.post('/task/logs', {
+    const response = await taskApi.logs({
       taskId: currentTask.value.id,
       page,
-      pageSize: 20
+      pageSize: logsPageSize
     })
     logs.value = response.data.list || []
-    logsPage.value = response.data.page
-    logsTotalPages.value = Math.ceil(response.data.total / 20)
+    applyLogsResult(response.data)
   } catch (error: any) {
     toast.error(error.message || '加载日志失败')
   } finally {
@@ -195,7 +181,7 @@ const loadLogs = async (page = 1) => {
 const clearLogs = async () => {
   if (!currentTask.value || !confirm('确定要清空此任务的所有日志吗？')) return
   try {
-    await api.post('/task/clearLogs', { taskId: currentTask.value.id })
+    await taskApi.clearLogs(currentTask.value.id)
     toast.success('日志已清空')
     logs.value = []
     logsTotalPages.value = 0

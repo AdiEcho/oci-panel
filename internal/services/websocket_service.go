@@ -48,7 +48,9 @@ func (ws *WebSocketService) run() {
 			log.Printf("Client disconnected. Total clients: %d", len(ws.clients))
 
 		case message := <-ws.broadcast:
-			ws.mu.RLock()
+			// 广播分支会在写入失败时从 clients 中删除连接，属于写操作，
+			// 必须持有写锁（此前用 RLock 下 delete map 属错误锁纪律）。
+			ws.mu.Lock()
 			for client := range ws.clients {
 				err := client.WriteMessage(websocket.TextMessage, message)
 				if err != nil {
@@ -57,7 +59,7 @@ func (ws *WebSocketService) run() {
 					delete(ws.clients, client)
 				}
 			}
-			ws.mu.RUnlock()
+			ws.mu.Unlock()
 		}
 	}
 }

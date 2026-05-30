@@ -104,25 +104,17 @@ func (s *TelegramService) loadConfig() {
 }
 
 func (s *TelegramService) UpdateConfig(botToken, chatID string, enabled bool) error {
-	db := database.GetDB()
-
-	settings := []models.SysSetting{
-		{Key: SettingKeyTgBotToken, Value: botToken},
-		{Key: SettingKeyTgChatID, Value: chatID},
-		{Key: SettingKeyTgEnabled, Value: fmt.Sprintf("%t", enabled)},
+	settings := []struct {
+		key   string
+		value string
+	}{
+		{SettingKeyTgBotToken, botToken},
+		{SettingKeyTgChatID, chatID},
+		{SettingKeyTgEnabled, fmt.Sprintf("%t", enabled)},
 	}
-
 	for _, setting := range settings {
-		var existing models.SysSetting
-		if err := db.Where("key = ?", setting.Key).First(&existing).Error; err != nil {
-			setting.ID = fmt.Sprintf("%d", time.Now().UnixNano())
-			if err := db.Create(&setting).Error; err != nil {
-				return err
-			}
-		} else {
-			if err := db.Model(&existing).Update("value", setting.Value).Error; err != nil {
-				return err
-			}
+		if err := database.UpsertSysSetting(setting.key, setting.value); err != nil {
+			return err
 		}
 	}
 
@@ -447,6 +439,34 @@ func (s *TelegramService) handleCallback(callback *struct {
 	}
 }
 
+// telegramConcurrency 限制 Telegram 汇总命令对每个配置的并发查询数，避免一次性对 OCI 发起过多请求。
+const telegramConcurrency = 5
+
+// parallelMapUsers 以受限并发对每个 user 执行 fn，结果按 users 原顺序返回。
+// 单个 fn panic 不影响其余配置（该项保留零值结果）。
+func parallelMapUsers[T any](users []models.OciUser, concurrency int, fn func(user models.OciUser) T) []T {
+	results := make([]T, len(users))
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	for i := range users {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int) {
+			defer wg.Done()
+			defer func() {
+				<-sem
+				_ = recover() // 单配置查询 panic 不应杀进程或影响其余统计
+			}()
+			results[idx] = fn(users[idx])
+		}(i)
+	}
+	wg.Wait()
+	return results
+}
+
 func (s *TelegramService) checkAlive() string {
 	db := database.GetDB()
 
@@ -459,19 +479,27 @@ func (s *TelegramService) checkAlive() string {
 		return "【API测活结果】\n\n暂无配置"
 	}
 
+	type aliveResult struct {
+		valid bool
+		name  string
+	}
+	results := parallelMapUsers(users, telegramConcurrency, func(user models.OciUser) aliveResult {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, err := s.ociService.ListInstances(ctx, &user, user.OciTenantID)
+		return aliveResult{valid: err == nil, name: user.Username}
+	})
+
 	var validCount, invalidCount int
 	var invalidNames []string
-
-	for _, user := range users {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := s.ociService.ListInstances(ctx, &user, user.OciTenantID)
-		cancel()
-
-		if err != nil {
-			invalidCount++
-			invalidNames = append(invalidNames, user.Username)
-		} else {
+	for _, r := range results {
+		if r.valid {
 			validCount++
+		} else {
+			invalidCount++
+			if r.name != "" {
+				invalidNames = append(invalidNames, r.name)
+			}
 		}
 	}
 
@@ -523,30 +551,39 @@ func (s *TelegramService) getInstanceStats() string {
 		return "【实例统计】\n\n暂无配置"
 	}
 
-	var totalInstances, runningInstances int
-	var stats []string
-
-	for _, user := range users {
+	type statResult struct {
+		line    string
+		total   int
+		running int
+	}
+	results := parallelMapUsers(users, telegramConcurrency, func(user models.OciUser) statResult {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		instances, err := s.ociService.ListInstances(ctx, &user, user.OciTenantID)
-		cancel()
-
 		if err != nil {
-			stats = append(stats, fmt.Sprintf("❌ %s: 获取失败", user.Username))
-			continue
+			return statResult{line: fmt.Sprintf("❌ %s: 获取失败", user.Username)}
 		}
-
 		running := 0
 		for _, inst := range instances {
 			if inst.LifecycleState == "RUNNING" {
 				running++
 			}
 		}
+		return statResult{
+			line:    fmt.Sprintf("🔑 %s [%s]: %d台 (运行中: %d)", user.Username, user.OciRegion, len(instances), running),
+			total:   len(instances),
+			running: running,
+		}
+	})
 
-		totalInstances += len(instances)
-		runningInstances += running
-		stats = append(stats, fmt.Sprintf("🔑 %s [%s]: %d台 (运行中: %d)",
-			user.Username, user.OciRegion, len(instances), running))
+	var totalInstances, runningInstances int
+	var stats []string
+	for _, r := range results {
+		if r.line != "" {
+			stats = append(stats, r.line)
+		}
+		totalInstances += r.total
+		runningInstances += r.running
 	}
 
 	return fmt.Sprintf("【实例统计】\n\n🕐 时间：%s\n📊 总实例数：%d\n🟢 运行中：%d\n\n%s",
@@ -594,21 +631,24 @@ func (s *TelegramService) getTrafficStats() string {
 		return "【流量统计】\n\n暂无配置"
 	}
 
-	var stats []string
-	for _, user := range users {
+	lines := parallelMapUsers(users, telegramConcurrency, func(user models.OciUser) string {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
 		trafficStats, err := s.ociService.GetMonthlyTrafficStats(ctx, &user)
-		cancel()
-
 		if err != nil {
-			stats = append(stats, fmt.Sprintf("❌ %s: 获取失败", user.Username))
-			continue
+			return fmt.Sprintf("❌ %s: 获取失败", user.Username)
 		}
-
-		stats = append(stats, fmt.Sprintf("🔑 配置名：【%s】\n🌏 主区域：【%s】\n🖥️ 实例数量：【%d】台\n⬇️ 本月入站流量：%s\n⬆️ 本月出站流量：%s",
+		return fmt.Sprintf("🔑 配置名：【%s】\n🌏 主区域：【%s】\n🖥️ 实例数量：【%d】台\n⬇️ 本月入站流量：%s\n⬆️ 本月出站流量：%s",
 			user.Username, user.OciRegion, trafficStats.InstanceCount,
 			FormatBytes(trafficStats.InboundTraffic),
-			FormatBytes(trafficStats.OutboundTraffic)))
+			FormatBytes(trafficStats.OutboundTraffic))
+	})
+
+	var stats []string
+	for _, line := range lines {
+		if line != "" {
+			stats = append(stats, line)
+		}
 	}
 
 	return fmt.Sprintf("【流量统计】\n\n🕐 时间：%s\n\n%s",

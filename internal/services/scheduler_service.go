@@ -164,15 +164,7 @@ func (s *SchedulerService) UpdateConfigCache(configID string) error {
 			}
 		}
 
-		var instanceInfos []models.InstanceInfo
-		for _, inst := range instances {
-			if inst.Id != nil {
-				detail, err := s.ociService.GetInstanceDetails(ctx, &user, *inst.Id)
-				if err == nil {
-					instanceInfos = append(instanceInfos, *detail)
-				}
-			}
-		}
+		instanceInfos := s.ociService.GetInstancesDetailsConcurrent(ctx, &user, instances)
 		if data, err := json.Marshal(instanceInfos); err == nil {
 			cache.InstancesData = string(data)
 		}
@@ -246,46 +238,20 @@ func (s *SchedulerService) GetCacheInterval() int {
 }
 
 func (s *SchedulerService) SetCacheEnabled(enabled bool) error {
-	db := database.GetDB()
 	value := "false"
 	if enabled {
 		value = "true"
 	}
-
-	var setting models.SysSetting
-	result := db.Where("key = ?", SettingCacheEnabled).First(&setting)
-	if result.Error != nil {
-		setting = models.SysSetting{
-			ID:    uuid.New().String(),
-			Key:   SettingCacheEnabled,
-			Value: value,
-		}
-		return db.Create(&setting).Error
-	}
-	setting.Value = value
-	return db.Save(&setting).Error
+	return database.UpsertSysSetting(SettingCacheEnabled, value)
 }
 
 func (s *SchedulerService) SetCacheInterval(minutes int) error {
-	db := database.GetDB()
 	value := "30"
 	if minutes > 0 {
 		data, _ := json.Marshal(minutes)
 		value = string(data)
 	}
-
-	var setting models.SysSetting
-	result := db.Where("key = ?", SettingCacheInterval).First(&setting)
-	if result.Error != nil {
-		setting = models.SysSetting{
-			ID:    uuid.New().String(),
-			Key:   SettingCacheInterval,
-			Value: value,
-		}
-		return db.Create(&setting).Error
-	}
-	setting.Value = value
-	return db.Save(&setting).Error
+	return database.UpsertSysSetting(SettingCacheInterval, value)
 }
 
 func (s *SchedulerService) GetConfigCache(configID string) (*models.OciConfigCache, error) {

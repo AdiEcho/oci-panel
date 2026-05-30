@@ -7,6 +7,7 @@ import (
 
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/adiecho/oci-panel/internal/services"
+	"github.com/adiecho/oci-panel/internal/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -276,13 +277,13 @@ func (ic *InstanceController) AutoRescue(c *gin.Context) {
 	}
 
 	// 异步执行救援任务
-	go func() {
+	util.Go("AutoRescue", func() {
 		progressChan := make(chan services.AutoRescueProgress, 10)
-		go func() {
+		util.Go("AutoRescue.progress", func() {
 			for progress := range progressChan {
 				ic.wsService.SendInfo(fmt.Sprintf("AutoRescue [%s] Step %d/%d: %s", req.InstanceId, progress.Step, progress.TotalSteps, progress.Message))
 			}
-		}()
+		})
 
 		err := ic.instanceService.AutoRescue(req.UserId, req.InstanceId, req.InstanceName, req.KeepBackup, progressChan)
 		close(progressChan)
@@ -292,7 +293,7 @@ func (ic *InstanceController) AutoRescue(c *gin.Context) {
 		} else {
 			ic.wsService.SendSuccess(fmt.Sprintf("AutoRescue completed for instance %s", req.InstanceId))
 		}
-	}()
+	})
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "自动救援任务已启动，请等待完成"))
 }
@@ -318,7 +319,7 @@ func (ic *InstanceController) Enable500Mbps(c *gin.Context) {
 	sshPort := 22
 
 	// 异步执行
-	go func() {
+	util.Go("Enable500Mbps", func() {
 		publicIP, err := ic.instanceService.Enable500Mbps(req.UserId, req.InstanceId, sshPort)
 		if err != nil {
 			log.Printf("Enable500Mbps failed for instance %s: %v", req.InstanceId, err)
@@ -327,7 +328,7 @@ func (ic *InstanceController) Enable500Mbps(c *gin.Context) {
 			log.Printf("Enable500Mbps succeeded for instance %s, new IP: %s", req.InstanceId, publicIP)
 			ic.wsService.SendSuccess(fmt.Sprintf("Enable500Mbps succeeded for instance %s, new IP: %s", req.InstanceId, publicIP))
 		}
-	}()
+	})
 
 	c.JSON(http.StatusOK, models.SuccessResponse(map[string]interface{}{
 		"warning": "开启后实例原公网IP将失效，请使用新分配的负载均衡器IP访问。此操作仅支持 VM.Standard.E2.1.Micro 实例。",
@@ -355,7 +356,7 @@ func (ic *InstanceController) Disable500Mbps(c *gin.Context) {
 	retainNlb := false
 
 	// 异步执行
-	go func() {
+	util.Go("Disable500Mbps", func() {
 		err := ic.instanceService.Disable500Mbps(req.UserId, req.InstanceId, retainNatGw, retainNlb)
 		if err != nil {
 			log.Printf("Disable500Mbps failed for instance %s: %v", req.InstanceId, err)
@@ -363,7 +364,7 @@ func (ic *InstanceController) Disable500Mbps(c *gin.Context) {
 		} else {
 			ic.wsService.SendSuccess(fmt.Sprintf("Disable500Mbps completed for instance %s", req.InstanceId))
 		}
-	}()
+	})
 
 	c.JSON(http.StatusOK, models.SuccessResponse(map[string]interface{}{
 		"warning": "关闭后NAT网关和网络负载均衡器将被删除，实例将失去公网访问能力，需要重新分配公网IP。",

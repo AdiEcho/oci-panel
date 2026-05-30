@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/lib/api'
+import { sysApi } from '@/api'
 
 export interface User {
   username: string
@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
 
   async function login(account: string, password: string): Promise<LoginResult> {
-    const response = await api.post('/sys/login', { account, password })
+    const response = await sysApi.login(account, password)
 
     if (response.data.needMfa || response.data.needPasskey) {
       pendingAccount.value = account
@@ -32,9 +32,9 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
-    token.value = response.data.token
+    token.value = response.data.token || ''
     user.value = {
-      username: response.data.username,
+      username: response.data.username || '',
       account: account
     }
 
@@ -56,7 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function verifyMfa(code: string): Promise<void> {
-    const response = await api.post('/sys/checkMfaCode', { code })
+    const response = await sysApi.checkMfaCode(code)
 
     token.value = response.data.token
     user.value = {

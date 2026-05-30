@@ -47,35 +47,41 @@ func (s *OCIService) GetTenantInfo(ctx context.Context, user *models.OciUser) (*
 		}
 	}
 
-	// 获取用户列表
-	usersReq := identity.ListUsersRequest{CompartmentId: &user.OciTenantID}
-	usersResp, err := identityClient.ListUsers(ctx, usersReq)
-	if err == nil {
-		for _, u := range usersResp.Items {
-			userInfo := models.TenantUserInfo{
-				ID:    *u.Id,
-				State: string(u.LifecycleState),
-			}
-			if u.Name != nil {
-				userInfo.Name = *u.Name
-			}
-			if u.Email != nil {
-				userInfo.Email = *u.Email
-			}
-			if u.EmailVerified != nil {
-				userInfo.EmailVerified = *u.EmailVerified
-			}
-			if u.IsMfaActivated != nil {
-				userInfo.IsMfaActivated = *u.IsMfaActivated
-			}
-			if u.TimeCreated != nil {
-				userInfo.CreateTime = u.TimeCreated.Format("2006-01-02 15:04:05")
-			}
-			if u.LastSuccessfulLoginTime != nil {
-				userInfo.LastSuccessfulLoginTime = u.LastSuccessfulLoginTime.Format("2006-01-02 15:04:05")
-			}
-			tenantInfo.UserList = append(tenantInfo.UserList, userInfo)
+	// 获取用户列表（全量分页，最佳努力：失败则用户列表为空但不影响其余租户信息）
+	allUsers, _ := paginate(func(page *string) ([]identity.User, *string, error) {
+		resp, perr := identityClient.ListUsers(ctx, identity.ListUsersRequest{
+			CompartmentId: &user.OciTenantID,
+			Page:          page,
+		})
+		if perr != nil {
+			return nil, nil, perr
 		}
+		return resp.Items, resp.OpcNextPage, nil
+	})
+	for _, u := range allUsers {
+		userInfo := models.TenantUserInfo{
+			ID:    *u.Id,
+			State: string(u.LifecycleState),
+		}
+		if u.Name != nil {
+			userInfo.Name = *u.Name
+		}
+		if u.Email != nil {
+			userInfo.Email = *u.Email
+		}
+		if u.EmailVerified != nil {
+			userInfo.EmailVerified = *u.EmailVerified
+		}
+		if u.IsMfaActivated != nil {
+			userInfo.IsMfaActivated = *u.IsMfaActivated
+		}
+		if u.TimeCreated != nil {
+			userInfo.CreateTime = u.TimeCreated.Format("2006-01-02 15:04:05")
+		}
+		if u.LastSuccessfulLoginTime != nil {
+			userInfo.LastSuccessfulLoginTime = u.LastSuccessfulLoginTime.Format("2006-01-02 15:04:05")
+		}
+		tenantInfo.UserList = append(tenantInfo.UserList, userInfo)
 	}
 
 	// 获取密码过期策略

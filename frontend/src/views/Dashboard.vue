@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Settings2, ListTodo, Plus, Server, ArrowRight, Activity, TrendingUp, Zap } from 'lucide-vue-next'
-import api from '@/lib/api'
+import { sysApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -17,7 +17,7 @@ const loading = ref(true)
 
 const loadStats = async () => {
   try {
-    const response = await api.get('/sys/getGlance')
+    const response = await sysApi.getGlance()
     if (response.data) {
       stats.value = response.data
     }

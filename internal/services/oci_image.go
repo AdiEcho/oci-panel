@@ -33,20 +33,26 @@ func (s *OCIService) ListImages(ctx context.Context, user *models.OciUser, regio
 		shape = "VM.Standard.E2.1.Micro"
 	}
 
-	req := core.ListImagesRequest{
-		CompartmentId: &compartmentId,
-		Shape:         &shape,
-		SortBy:        core.ListImagesSortByTimecreated,
-		SortOrder:     core.ListImagesSortOrderDesc,
-	}
-
-	resp, err := computeClient.ListImages(ctx, req)
+	// 全量分页：镜像可能有数百条，此前只取首页会截断。
+	imgItems, err := paginate(func(page *string) ([]core.Image, *string, error) {
+		resp, err := computeClient.ListImages(ctx, core.ListImagesRequest{
+			CompartmentId: &compartmentId,
+			Shape:         &shape,
+			SortBy:        core.ListImagesSortByTimecreated,
+			SortOrder:     core.ListImagesSortOrderDesc,
+			Page:          page,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return resp.Items, resp.OpcNextPage, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("获取镜像列表失败: %w", err)
 	}
 
 	var images []ImageInfo
-	for _, img := range resp.Items {
+	for _, img := range imgItems {
 		info := ImageInfo{
 			ID:                     *img.Id,
 			DisplayName:            *img.DisplayName,

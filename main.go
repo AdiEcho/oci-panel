@@ -12,11 +12,13 @@ import (
 
 func main() {
 	cfg := config.Load()
-	middleware.InitJwtSecret(cfg)
 
+	// 必须先初始化数据库：InitJwtSecret 在未配置密钥时会把自动生成的密钥持久化到数据库。
 	if err := database.InitDB(cfg.Database.DSN); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+
+	middleware.InitJwtSecret(cfg)
 
 	r := gin.Default()
 	services := router.Setup(r, cfg)

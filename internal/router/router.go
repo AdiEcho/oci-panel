@@ -15,7 +15,7 @@ type Services struct {
 }
 
 func Setup(r *gin.Engine, cfg *config.Config) *Services {
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg.Web.AllowOrigins))
 	r.Use(middleware.AuthMiddleware())
 
 	// 静态资源 - 前端构建文件
@@ -30,13 +30,12 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 	ociService := services.NewOCIService(cfg)
 	instanceService := services.NewInstanceService(ociService)
 	ipService := services.NewIpService(ociService)
-	_ = services.NewVolumeService(ociService)
 	wsService := services.NewWebSocketService()
 	schedulerService := services.NewSchedulerService(ociService)
 	taskService := services.NewTaskService(ociService)
 	telegramService := services.NewTelegramService(ociService)
 
-	wsCtrl := controllers.NewWebSocketController(wsService)
+	wsCtrl := controllers.NewWebSocketController(wsService, cfg.Web.AllowOrigins)
 	r.GET("/ws/logs", wsCtrl.HandleWebSocket)
 
 	api := r.Group("/api")

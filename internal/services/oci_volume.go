@@ -18,17 +18,23 @@ func (s *OCIService) ListBootVolumes(ctx context.Context, user *models.OciUser, 
 		return nil, err
 	}
 
-	req := core.ListBootVolumesRequest{
-		CompartmentId: &compartmentId,
-	}
-
-	resp, err := client.ListBootVolumes(ctx, req)
+	// 全量分页：消除只取首页导致的引导卷截断。
+	bootVolumes, err := paginate(func(page *string) ([]core.BootVolume, *string, error) {
+		resp, err := client.ListBootVolumes(ctx, core.ListBootVolumesRequest{
+			CompartmentId: &compartmentId,
+			Page:          page,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return resp.Items, resp.OpcNextPage, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	volumes := make([]models.VolumeInfo, 0)
-	for _, bv := range resp.Items {
+	volumes := make([]models.VolumeInfo, 0, len(bootVolumes))
+	for _, bv := range bootVolumes {
 		volume := models.VolumeInfo{
 			ID:          *bv.Id,
 			DisplayName: *bv.DisplayName,

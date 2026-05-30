@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/adiecho/oci-panel/internal/config"
 	"github.com/adiecho/oci-panel/internal/models"
@@ -27,6 +28,7 @@ type cachedClients struct {
 	network        *core.VirtualNetworkClient
 	blockstorage   *core.BlockstorageClient
 	identity       *identity.IdentityClient
+	monitoring     *monitoring.MonitoringClient
 	nlb            *networkloadbalancer.NetworkLoadBalancerClient
 	mu             sync.Mutex
 }
@@ -41,6 +43,41 @@ func stringPtr(s string) *string {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// paginate 反复调用 listPage 聚合所有分页结果，消除「只取首页、忽略 OpcNextPage」导致的结果截断。
+// listPage 接收上一页返回的下一页 token（首次为 nil），返回当前页条目与下一页 token（无更多页时为 nil）。
+func paginate[T any](listPage func(page *string) (items []T, nextPage *string, err error)) ([]T, error) {
+	var all []T
+	var page *string
+	for {
+		items, next, err := listPage(page)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+		if next == nil {
+			return all, nil
+		}
+		page = next
+	}
+}
+
+// waitForState 轮询 getState 直到 isReady 为真，或达到 maxAttempts 次；每次之间 sleep interval。
+// 与原「创建后轮询」循环行为一致：getState 出错时视为「尚未就绪」并继续重试（不终止）；
+// 用尽次数仍未就绪则返回 (最后一次成功取到的值, false)。调用方通常只在 ok==true 时使用返回值。
+func waitForState[T any](maxAttempts int, interval time.Duration, getState func() (T, error), isReady func(T) bool) (T, bool) {
+	var last T
+	for i := 0; i < maxAttempts; i++ {
+		if v, err := getState(); err == nil {
+			last = v
+			if isReady(v) {
+				return last, true
+			}
+		}
+		time.Sleep(interval)
+	}
+	return last, false
 }
 
 func (s *OCIService) GetConfigProvider(user *models.OciUser) (common.ConfigurationProvider, error) {
@@ -61,12 +98,19 @@ func (s *OCIService) GetConfigProvider(user *models.OciUser) (common.Configurati
 }
 
 func (s *OCIService) getCachedClients(user *models.OciUser) (*cachedClients, error) {
-	cacheKey := user.ID + ":" + user.OciRegion
+	return s.getCachedClientsForRegion(user, user.OciRegion)
+}
+
+// getCachedClientsForRegion 返回 (user, region) 维度缓存的客户端集合。同一 user+region
+// 复用同一组 OCI 客户端与 configProvider，避免每次重新读取磁盘私钥并重建客户端。
+// 当 region == user.OciRegion 时，与 getCachedClients 命中同一缓存条目。
+func (s *OCIService) getCachedClientsForRegion(user *models.OciUser, region string) (*cachedClients, error) {
+	cacheKey := user.ID + ":" + region
 	if cached, ok := s.clientCache.Load(cacheKey); ok {
 		return cached.(*cachedClients), nil
 	}
 
-	configProvider, err := s.GetConfigProvider(user)
+	configProvider, err := s.GetConfigProviderForRegion(user, region)
 	if err != nil {
 		return nil, err
 	}
@@ -175,16 +219,23 @@ func (s *OCIService) GetIdentityDomainsClient(user *models.OciUser, endpoint str
 }
 
 func (s *OCIService) GetMonitoringClient(user *models.OciUser) (monitoring.MonitoringClient, error) {
-	configProvider, err := s.GetConfigProvider(user)
+	cc, err := s.getCachedClients(user)
 	if err != nil {
 		return monitoring.MonitoringClient{}, err
 	}
 
-	client, err := monitoring.NewMonitoringClientWithConfigurationProvider(configProvider)
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	if cc.monitoring != nil {
+		return *cc.monitoring, nil
+	}
+
+	client, err := monitoring.NewMonitoringClientWithConfigurationProvider(cc.configProvider)
 	if err != nil {
 		return monitoring.MonitoringClient{}, err
 	}
-
+	cc.monitoring = &client
 	return client, nil
 }
 
@@ -227,27 +278,66 @@ func (s *OCIService) GetConfigProviderForRegion(user *models.OciUser, region str
 }
 
 func (s *OCIService) GetComputeClientForRegion(user *models.OciUser, region string) (core.ComputeClient, error) {
-	configProvider, err := s.GetConfigProviderForRegion(user, region)
+	cc, err := s.getCachedClientsForRegion(user, region)
 	if err != nil {
 		return core.ComputeClient{}, err
 	}
-	return core.NewComputeClientWithConfigurationProvider(configProvider)
+
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	if cc.compute != nil {
+		return *cc.compute, nil
+	}
+
+	client, err := core.NewComputeClientWithConfigurationProvider(cc.configProvider)
+	if err != nil {
+		return core.ComputeClient{}, err
+	}
+	cc.compute = &client
+	return client, nil
 }
 
 func (s *OCIService) GetVirtualNetworkClientForRegion(user *models.OciUser, region string) (core.VirtualNetworkClient, error) {
-	configProvider, err := s.GetConfigProviderForRegion(user, region)
+	cc, err := s.getCachedClientsForRegion(user, region)
 	if err != nil {
 		return core.VirtualNetworkClient{}, err
 	}
-	return core.NewVirtualNetworkClientWithConfigurationProvider(configProvider)
+
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	if cc.network != nil {
+		return *cc.network, nil
+	}
+
+	client, err := core.NewVirtualNetworkClientWithConfigurationProvider(cc.configProvider)
+	if err != nil {
+		return core.VirtualNetworkClient{}, err
+	}
+	cc.network = &client
+	return client, nil
 }
 
 func (s *OCIService) GetIdentityClientForRegion(user *models.OciUser, region string) (identity.IdentityClient, error) {
-	configProvider, err := s.GetConfigProviderForRegion(user, region)
+	cc, err := s.getCachedClientsForRegion(user, region)
 	if err != nil {
 		return identity.IdentityClient{}, err
 	}
-	return identity.NewIdentityClientWithConfigurationProvider(configProvider)
+
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	if cc.identity != nil {
+		return *cc.identity, nil
+	}
+
+	client, err := identity.NewIdentityClientWithConfigurationProvider(cc.configProvider)
+	if err != nil {
+		return identity.IdentityClient{}, err
+	}
+	cc.identity = &client
+	return client, nil
 }
 
 // InvalidateClientCache removes cached clients for a user (call when credentials change)

@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useMotion } from '@vueuse/motion'
 import { RouterLink } from 'vue-router'
 import { Plus, Trash2, Edit, Loader2, Package, Cpu, HardDrive, MemoryStick, Key, MoreHorizontal } from 'lucide-vue-next'
-import api from '@/lib/api'
+import { presetApi, keyApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -58,7 +58,7 @@ const form = ref({
 const loadPresets = async () => {
   loading.value = true
   try {
-    const response = await api.get('/preset/list')
+    const response = await presetApi.list()
     presets.value = response.data || []
   } catch (error: any) {
     toast.error(error.message || '加载失败')
@@ -69,7 +69,7 @@ const loadPresets = async () => {
 
 const loadSSHKeys = async () => {
   try {
-    const response = await api.get('/key/standalone')
+    const response = await keyApi.standalone()
     sshKeys.value = response.data || []
   } catch {
     sshKeys.value = []
@@ -122,10 +122,10 @@ const submitForm = async () => {
   submitting.value = true
   try {
     if (editing.value) {
-      await api.post('/preset/update', { id: editing.value.id, ...form.value })
+      await presetApi.update({ id: editing.value.id, ...form.value })
       toast.success('更新成功')
     } else {
-      await api.post('/preset/create', form.value)
+      await presetApi.create(form.value)
       toast.success('创建成功')
     }
     closeModal()
@@ -140,7 +140,7 @@ const submitForm = async () => {
 const deletePreset = async (id: string) => {
   if (!confirm('确定要删除此预设吗？')) return
   try {
-    await api.post('/preset/delete', { id })
+    await presetApi.delete(id)
     toast.success('删除成功')
     await loadPresets()
   } catch (error: any) {

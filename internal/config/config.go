@@ -15,6 +15,9 @@ type Config struct {
 		Account   string `toml:"account"`
 		Password  string `toml:"password"`
 		JwtSecret string `toml:"jwt_secret"`
+		// AllowOrigins 是允许跨域访问的来源白名单（精确匹配 Origin 头）。
+		// 留空表示仅允许同源访问（生产环境前端由本服务同源托管，无需配置）。
+		AllowOrigins []string `toml:"allow_origins"`
 	} `toml:"web"`
 	Database struct {
 		DSN string `toml:"dsn"`
