@@ -154,6 +154,17 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// RequestBodyLimit bounds every HTTP request body before handlers parse JSON or
+// multipart data. Individual upload handlers may apply a smaller limit.
+func RequestBodyLimit(maxBytes int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		}
+		c.Next()
+	}
+}
+
 // CORS 返回跨域中间件。仅当请求 Origin 命中白名单时才回显该 Origin 并允许携带凭证，
 // 避免此前 "Access-Control-Allow-Origin: * + Allow-Credentials: true" 的非法且不安全组合。
 // 白名单为空时不下发任何 ACAO 头（同源请求不受影响，生产环境前端由本服务同源托管）。

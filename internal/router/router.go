@@ -15,6 +15,7 @@ type Services struct {
 }
 
 func Setup(r *gin.Engine, cfg *config.Config) *Services {
+	r.Use(middleware.RequestBodyLimit(2 << 20))
 	r.Use(middleware.CORS(cfg.Web.AllowOrigins))
 	r.Use(middleware.AuthMiddleware())
 
@@ -45,6 +46,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 		{
 			sys.POST("/login", sysCtrl.Login)
 			sys.POST("/checkMfaCode", sysCtrl.CheckMfaCode)
+			sys.POST("/wsTicket", wsCtrl.IssueTicket)
 			sys.GET("/getGlance", sysCtrl.GetGlance)
 			sys.GET("/getSysCfg", sysCtrl.GetSysCfg)
 			sys.POST("/updateCacheCfg", sysCtrl.UpdateCacheCfg)

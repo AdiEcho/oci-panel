@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/adiecho/oci-panel/internal/services"
@@ -25,11 +26,18 @@ type TelegramConfigResponse struct {
 	Running  bool   `json:"running"`
 }
 
+func maskBotToken(token string) string {
+	if token == "" {
+		return ""
+	}
+	return "****"
+}
+
 func (tc *TelegramController) GetConfig(c *gin.Context) {
 	botToken, chatID, enabled := tc.telegramService.GetConfig()
 
 	c.JSON(http.StatusOK, models.SuccessResponse(TelegramConfigResponse{
-		BotToken: botToken,
+		BotToken: maskBotToken(botToken),
 		ChatID:   chatID,
 		Enabled:  enabled,
 		Running:  tc.telegramService.IsRunning(),
@@ -51,7 +59,7 @@ func (tc *TelegramController) UpdateConfig(c *gin.Context) {
 
 	currentToken, _, _ := tc.telegramService.GetConfig()
 	botToken := req.BotToken
-	if botToken == "" || (len(botToken) > 4 && botToken[len(botToken)-4:] == "****") {
+	if botToken == "" || botToken == "****" || strings.HasSuffix(botToken, "****") {
 		botToken = currentToken
 	}
 

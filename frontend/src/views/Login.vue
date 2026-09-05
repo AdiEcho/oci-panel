@@ -141,6 +141,7 @@ const backToLogin = () => {
   needPasskey.value = false
   mfaCode.value = ''
   error.value = ''
+  authStore.clearPendingVerification()
 }
 </script>
 

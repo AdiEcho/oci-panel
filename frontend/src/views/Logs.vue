@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { sysApi } from '@/api'
 
 interface LogEntry {
   message: string
@@ -16,6 +17,7 @@ const authStore = useAuthStore()
 const logs = ref<LogEntry[]>([])
 const isConnected = ref(false)
 const ws = ref<WebSocket | null>(null)
+const connecting = ref(false)
 const logConsole = ref<HTMLElement>()
 
 // 日志缓冲上限：实时日志流可能无限增长，超过上限后丢弃最旧的条目，
@@ -39,18 +41,18 @@ const addLog = (message: string, type: LogEntry['type'] = 'info') => {
   })
 }
 
-const connectWebSocket = () => {
+const connectWebSocket = async () => {
+  if (ws.value || connecting.value) return
+  connecting.value = true
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  // 浏览器无法为 WebSocket 设置 Authorization 头，故 token 通过查询参数传递，
-  // 后端在升级连接前校验该 token（/ws/logs 不再是未鉴权的开放日志流）。
-  const token = authStore.token
-  if (!token) {
-    toast.error('未登录，无法连接日志流')
-    return
-  }
-  const wsUrl = `${protocol}//${window.location.host}/ws/logs?token=${encodeURIComponent(token)}`
 
   try {
+    if (!authStore.token) {
+      toast.error('未登录，无法连接日志流')
+      return
+    }
+    const ticketResponse = await sysApi.issueWebSocketTicket()
+    const wsUrl = `${protocol}//${window.location.host}/ws/logs?ticket=${encodeURIComponent(ticketResponse.data.ticket)}`
     ws.value = new WebSocket(wsUrl)
 
     ws.value.onopen = () => {
@@ -74,6 +76,8 @@ const connectWebSocket = () => {
     }
   } catch {
     toast.error('无法建立WebSocket连接')
+  } finally {
+    connecting.value = false
   }
 }
 

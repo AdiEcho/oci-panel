@@ -69,7 +69,8 @@ port = "8999"
 
 [web]
 account = "admin"
-password = "admin"
+# 使用 bcrypt 哈希，不要使用 admin 或其他默认密码
+password = "$2b$12$replace-with-a-generated-bcrypt-hash"
 
 [database]
 dsn = "oci-helper.db"
@@ -97,6 +98,10 @@ oci-panel.exe
 ### 访问面板
 
 启动后访问 `http://localhost:8999`，使用配置文件中的账号密码登录。
+
+### Docker 与 Nginx 反代
+
+`docker-compose.yml` 默认只把服务发布到宿主机 `127.0.0.1:8999`，适合由宿主机 Nginx 反代并在 Nginx 处终止 HTTPS。请保留这个绑定地址，避免绕过 Nginx 直接暴露管理面板；Nginx 反代 WebSocket 时需要转发 `Upgrade` 和 `Connection` 请求头。
 
 ## 开发
 

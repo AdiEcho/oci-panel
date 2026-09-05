@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -40,6 +41,17 @@ func Load() *Config {
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		log.Fatalf("Failed to parse config file: %v", err)
+	}
+	if strings.TrimSpace(cfg.Web.Account) == "" || strings.TrimSpace(cfg.Web.Password) == "" {
+		log.Fatalf("web.account and web.password must be configured")
+	}
+	if cfg.Web.Account == "admin" && cfg.Web.Password == "admin" {
+		log.Fatalf("the default admin/admin credentials are not allowed")
+	}
+	for _, origin := range cfg.Web.AllowOrigins {
+		if strings.TrimSpace(origin) == "*" {
+			log.Fatalf("web.allow_origins must not contain '*' when authentication is enabled")
+		}
 	}
 
 	return &cfg

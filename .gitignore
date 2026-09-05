@@ -55,7 +55,4 @@ Thumbs.db
 config.toml
 /keys/.gitkeep
 /frontend/.postcssrc.json
-/go.sum
-/frontend/package-lock.json
 .omc/
-

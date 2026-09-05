@@ -1,8 +1,8 @@
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
-COPY frontend/package.json ./
-RUN npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
 COPY frontend/ ./
 RUN npm run build
 
@@ -10,11 +10,12 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 ARG TARGETARCH
 WORKDIR /app
+COPY go.mod go.sum ./
+ENV GOPROXY=https://proxy.golang.org,direct \
+    GOSUMDB=sum.golang.org
+RUN go mod download
 COPY . .
-ENV GOPROXY=https://goproxy.cn,direct \
-    GONOSUMDB=* \
-    GONOSUMCHECK=*
-RUN go mod tidy && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w" -o oci-panel main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w" -o oci-panel main.go
 
 # Stage 3: Final minimal image
 FROM alpine:3.21

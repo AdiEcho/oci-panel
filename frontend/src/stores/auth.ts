@@ -11,12 +11,14 @@ export interface LoginResult {
   needMfa: boolean
   needPasskey: boolean
   passkeyEnabled: boolean
+  mfaTicket?: string
 }
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const user = ref<User | null>(JSON.parse(localStorage.getItem('user') || 'null'))
   const pendingAccount = ref<string>('')
+  const pendingMfaTicket = ref<string>('')
 
   const isAuthenticated = computed(() => !!token.value)
 
@@ -25,13 +27,16 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (response.data.needMfa || response.data.needPasskey) {
       pendingAccount.value = account
+      pendingMfaTicket.value = response.data.mfaTicket || ''
       return {
         needMfa: response.data.needMfa || false,
         needPasskey: response.data.needPasskey || false,
-        passkeyEnabled: response.data.passkeyEnabled || false
+        passkeyEnabled: response.data.passkeyEnabled || false,
+        mfaTicket: response.data.mfaTicket
       }
     }
 
+    pendingMfaTicket.value = ''
     token.value = response.data.token || ''
     user.value = {
       username: response.data.username || '',
@@ -53,10 +58,14 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('token', token.value)
     localStorage.setItem('user', JSON.stringify(user.value))
     pendingAccount.value = ''
+    pendingMfaTicket.value = ''
   }
 
   async function verifyMfa(code: string): Promise<void> {
-    const response = await sysApi.checkMfaCode(code)
+    if (!pendingMfaTicket.value) {
+      throw new Error('MFA 登录流程已失效，请重新登录')
+    }
+    const response = await sysApi.checkMfaCode(pendingMfaTicket.value, code)
 
     token.value = response.data.token
     user.value = {
@@ -67,12 +76,18 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('token', token.value)
     localStorage.setItem('user', JSON.stringify(user.value))
     pendingAccount.value = ''
+    pendingMfaTicket.value = ''
+  }
+
+  function clearPendingVerification() {
+    pendingAccount.value = ''
+    pendingMfaTicket.value = ''
   }
 
   function logout() {
     token.value = ''
     user.value = null
-    pendingAccount.value = ''
+    clearPendingVerification()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
   }
@@ -90,6 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     setToken,
     verifyMfa,
+    clearPendingVerification,
     logout,
     checkAuth
   }

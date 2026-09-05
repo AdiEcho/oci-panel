@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,47 +13,78 @@ import (
 )
 
 type WebSocketService struct {
-	clients    map[*websocket.Conn]bool
-	broadcast  chan []byte
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
-	mu         sync.RWMutex
+	clients   map[*websocket.Conn]bool
+	broadcast chan []byte
+	tickets   map[string]webSocketTicket
+	mu        sync.RWMutex
+}
+
+const (
+	maxWebSocketClients = 64
+	webSocketTicketTTL  = time.Minute
+	maxWebSocketTickets = 1024
+)
+
+type webSocketTicket struct {
+	username  string
+	expiresAt time.Time
 }
 
 func NewWebSocketService() *WebSocketService {
 	ws := &WebSocketService{
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan []byte, 256),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
+		clients:   make(map[*websocket.Conn]bool),
+		broadcast: make(chan []byte, 256),
+		tickets:   make(map[string]webSocketTicket),
 	}
 	go ws.run()
 	return ws
 }
 
+func (ws *WebSocketService) IssueTicket(username string) (string, error) {
+	if username == "" {
+		return "", fmt.Errorf("missing authenticated username")
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	ticket := hex.EncodeToString(raw)
+	now := time.Now()
+
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	for existing, value := range ws.tickets {
+		if !now.Before(value.expiresAt) {
+			delete(ws.tickets, existing)
+		}
+	}
+	if len(ws.tickets) >= maxWebSocketTickets {
+		return "", fmt.Errorf("too many pending websocket tickets")
+	}
+	ws.tickets[ticket] = webSocketTicket{username: username, expiresAt: now.Add(webSocketTicketTTL)}
+	return ticket, nil
+}
+
+func (ws *WebSocketService) ConsumeTicket(ticket string) bool {
+	if ticket == "" {
+		return false
+	}
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	value, ok := ws.tickets[ticket]
+	delete(ws.tickets, ticket)
+	return ok && time.Now().Before(value.expiresAt)
+}
+
 func (ws *WebSocketService) run() {
 	for {
 		select {
-		case client := <-ws.register:
-			ws.mu.Lock()
-			ws.clients[client] = true
-			ws.mu.Unlock()
-			log.Printf("Client connected. Total clients: %d", len(ws.clients))
-
-		case client := <-ws.unregister:
-			ws.mu.Lock()
-			if _, ok := ws.clients[client]; ok {
-				delete(ws.clients, client)
-				client.Close()
-			}
-			ws.mu.Unlock()
-			log.Printf("Client disconnected. Total clients: %d", len(ws.clients))
-
 		case message := <-ws.broadcast:
 			// 广播分支会在写入失败时从 clients 中删除连接，属于写操作，
 			// 必须持有写锁（此前用 RLock 下 delete map 属错误锁纪律）。
 			ws.mu.Lock()
 			for client := range ws.clients {
+				_ = client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				err := client.WriteMessage(websocket.TextMessage, message)
 				if err != nil {
 					log.Printf("Error writing to client: %v", err)
@@ -64,16 +97,36 @@ func (ws *WebSocketService) run() {
 	}
 }
 
-func (ws *WebSocketService) RegisterClient(conn *websocket.Conn) {
-	ws.register <- conn
+func (ws *WebSocketService) RegisterClient(conn *websocket.Conn) bool {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	if len(ws.clients) >= maxWebSocketClients {
+		return false
+	}
+	ws.clients[conn] = true
+	log.Printf("Client connected. Total clients: %d", len(ws.clients))
+	return true
 }
 
 func (ws *WebSocketService) UnregisterClient(conn *websocket.Conn) {
-	ws.unregister <- conn
+	ws.mu.Lock()
+	if _, ok := ws.clients[conn]; ok {
+		delete(ws.clients, conn)
+		conn.Close()
+	}
+	count := len(ws.clients)
+	ws.mu.Unlock()
+	log.Printf("Client disconnected. Total clients: %d", count)
 }
 
 func (ws *WebSocketService) BroadcastMessage(message []byte) {
-	ws.broadcast <- message
+	select {
+	case ws.broadcast <- message:
+	default:
+		// Dropping a log message is preferable to blocking OCI/background work
+		// when a burst of logs fills the bounded broadcast queue.
+		log.Printf("WebSocket broadcast queue full; dropping log message")
+	}
 }
 
 func (ws *WebSocketService) SendLog(level string, message string) {

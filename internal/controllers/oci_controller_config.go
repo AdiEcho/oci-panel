@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/adiecho/oci-panel/internal/database"
@@ -162,6 +163,10 @@ func (oc *OciController) AddCfg(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
 		return
 	}
+	if _, err := util.KeyFilePath(req.OciKeyPath); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "Invalid private key filename"))
+		return
+	}
 
 	user := models.OciUser{
 		ID:             uuid.New().String(),
@@ -215,6 +220,10 @@ func (oc *OciController) UpdateCfgName(c *gin.Context) {
 	}
 
 	if req.OciKeyPath != "" {
+		if _, err := util.KeyFilePath(req.OciKeyPath); err != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "Invalid private key filename"))
+			return
+		}
 		updates["oci_key_path"] = req.OciKeyPath
 	}
 
@@ -245,8 +254,9 @@ func (oc *OciController) RemoveCfg(c *gin.Context) {
 
 	for _, user := range users {
 		if user.OciKeyPath != "" {
-			keyPath := filepath.Join("./keys", user.OciKeyPath)
-			os.Remove(keyPath)
+			if keyPath, err := util.KeyFilePath(user.OciKeyPath); err == nil {
+				_ = os.Remove(keyPath)
+			}
 		}
 	}
 
@@ -259,13 +269,21 @@ func (oc *OciController) RemoveCfg(c *gin.Context) {
 }
 
 func (oc *OciController) UploadKey(c *gin.Context) {
+	const maxPrivateKeySize = 1 << 20
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxPrivateKeySize)
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "No file uploaded"))
 		return
 	}
 
-	ext := filepath.Ext(file.Filename)
+	if file.Size <= 0 || file.Size > maxPrivateKeySize {
+		c.JSON(http.StatusRequestEntityTooLarge, models.ErrorResponse(413, "Private key file is too large"))
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
 	if ext != ".pem" && ext != ".key" {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "Only .pem or .key files are allowed"))
 		return
@@ -273,10 +291,14 @@ func (oc *OciController) UploadKey(c *gin.Context) {
 
 	keysDir := "./keys"
 	if _, err := os.Stat(keysDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(keysDir, 0755); err != nil {
+		if err := os.MkdirAll(keysDir, 0700); err != nil {
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "Failed to create keys directory"))
 			return
 		}
+	}
+	if err := os.Chmod(keysDir, 0700); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "Failed to secure keys directory"))
+		return
 	}
 
 	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
@@ -284,6 +306,11 @@ func (oc *OciController) UploadKey(c *gin.Context) {
 
 	if err := c.SaveUploadedFile(file, filePath); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "Failed to save file"))
+		return
+	}
+	if err := os.Chmod(filePath, 0600); err != nil {
+		_ = os.Remove(filePath)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "Failed to secure uploaded file"))
 		return
 	}
 

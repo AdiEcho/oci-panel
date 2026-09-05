@@ -9,6 +9,7 @@ import (
 
 	"github.com/adiecho/oci-panel/internal/config"
 	"github.com/adiecho/oci-panel/internal/models"
+	"github.com/adiecho/oci-panel/internal/util"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/core"
 	"github.com/oracle/oci-go-sdk/v65/identity"
@@ -81,7 +82,10 @@ func waitForState[T any](maxAttempts int, interval time.Duration, getState func(
 }
 
 func (s *OCIService) GetConfigProvider(user *models.OciUser) (common.ConfigurationProvider, error) {
-	keyPath := "keys/" + user.OciKeyPath
+	keyPath, err := util.KeyFilePath(user.OciKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key path: %w", err)
+	}
 	privateKey, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key: %w", err)
@@ -261,7 +265,10 @@ func (s *OCIService) GetNetworkLoadBalancerClient(user *models.OciUser) (network
 }
 
 func (s *OCIService) GetConfigProviderForRegion(user *models.OciUser, region string) (common.ConfigurationProvider, error) {
-	keyPath := "keys/" + user.OciKeyPath
+	keyPath, err := util.KeyFilePath(user.OciKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key path: %w", err)
+	}
 	privateKey, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key: %w", err)

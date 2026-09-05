@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
-	"github.com/adiecho/oci-panel/internal/middleware"
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/adiecho/oci-panel/internal/services"
 	"github.com/gin-gonic/gin"
@@ -17,6 +17,25 @@ type WebSocketController struct {
 	wsService      *services.WebSocketService
 	allowedOrigins []string
 	upgrader       websocket.Upgrader
+}
+
+func (wc *WebSocketController) IssueTicket(c *gin.Context) {
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse(401, "Unauthorized"))
+		return
+	}
+	usernameString, ok := username.(string)
+	if !ok || usernameString == "" {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse(401, "Unauthorized"))
+		return
+	}
+	ticket, err := wc.wsService.IssueTicket(usernameString)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse(503, "Unable to create websocket ticket"))
+		return
+	}
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"ticket": ticket}, "success"))
 }
 
 func NewWebSocketController(wsService *services.WebSocketService, allowedOrigins []string) *WebSocketController {
@@ -37,7 +56,7 @@ func NewWebSocketController(wsService *services.WebSocketService, allowedOrigins
 func (wc *WebSocketController) checkOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		// 非浏览器客户端（如本机脚本）通常没有 Origin 头；放行，鉴权仍由 token 保证。
+		// 非浏览器客户端（如本机脚本）通常没有 Origin 头；放行，鉴权仍由一次性 ticket 保证。
 		return true
 	}
 	u, err := url.Parse(origin)
@@ -56,15 +75,15 @@ func (wc *WebSocketController) checkOrigin(r *http.Request) bool {
 }
 
 func (wc *WebSocketController) HandleWebSocket(c *gin.Context) {
-	// 升级前先校验 token。浏览器无法为 WebSocket 设置自定义请求头，
-	// 因此 token 通过查询参数传递（此路由在 /api 之外，不经过 AuthMiddleware）。
-	token := c.Query("token")
-	if token == "" {
+	// 升级前先消费一次性短时 ticket。浏览器无法为 WebSocket 设置自定义请求头，
+	// 由已认证的 API 请求先取得 ticket，避免把长期 JWT 放进 URL 和反代日志。
+	ticket := c.Query("ticket")
+	if ticket == "" {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse(401, "Unauthorized"))
 		return
 	}
-	if _, err := middleware.ParseToken(token); err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse(401, "Invalid token"))
+	if !wc.wsService.ConsumeTicket(ticket) {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse(401, "Invalid websocket ticket"))
 		return
 	}
 
@@ -74,8 +93,39 @@ func (wc *WebSocketController) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	wc.wsService.RegisterClient(conn)
+	if !wc.wsService.RegisterClient(conn) {
+		_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "too many connections"), time.Now().Add(time.Second))
+		_ = conn.Close()
+		return
+	}
 	defer wc.wsService.UnregisterClient(conn)
+
+	const (
+		maxLogMessageSize = 4 << 10
+		pongWait          = 90 * time.Second
+		pingPeriod        = 30 * time.Second
+	)
+	conn.SetReadLimit(maxLogMessageSize)
+	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
 
 	wc.wsService.SendInfo("Connected to log stream")
 
