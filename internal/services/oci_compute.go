@@ -229,7 +229,7 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 			if err != nil {
 				return fmt.Errorf("创建VCN失败: %w", err)
 			}
-			vcnResp, ok := waitForState(30, time.Second,
+			vcnResp, ok := waitForState(ctx, 30, time.Second,
 				func() (core.GetVcnResponse, error) {
 					return vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: createVcnResp.Id})
 				},
@@ -267,7 +267,7 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 			if err != nil {
 				return fmt.Errorf("创建Internet网关失败: %w", err)
 			}
-			_, ok := waitForState(30, time.Second,
+			_, ok := waitForState(ctx, 30, time.Second,
 				func() (core.GetInternetGatewayResponse, error) {
 					return vnClient.GetInternetGateway(ctx, core.GetInternetGatewayRequest{IgId: createIgwResp.Id})
 				},
@@ -328,7 +328,7 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		if err != nil {
 			return fmt.Errorf("创建子网失败: %w", err)
 		}
-		_, ok := waitForState(30, time.Second,
+		_, ok := waitForState(ctx, 30, time.Second,
 			func() (core.GetSubnetResponse, error) {
 				return vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: createSubnetResp.Id})
 			},

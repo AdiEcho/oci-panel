@@ -231,6 +231,7 @@ func (oc *OciController) UpdateCfgName(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "Failed to update"))
 		return
 	}
+	oc.ociService.InvalidateClientCache(req.ID)
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "Updated successfully"))
 }
@@ -263,6 +264,9 @@ func (oc *OciController) RemoveCfg(c *gin.Context) {
 	if err := database.GetDB().Where("id IN ?", req.IDs).Delete(&models.OciUser{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "Failed to delete"))
 		return
+	}
+	for _, user := range users {
+		oc.ociService.InvalidateClientCache(user.ID)
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "Deleted successfully"))

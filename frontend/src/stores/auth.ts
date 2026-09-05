@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { sysApi } from '@/api'
+import { sysApi } from '@/api/sys'
 
 export interface User {
   username: string

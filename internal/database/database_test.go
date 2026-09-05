@@ -66,6 +66,48 @@ func TestWithSQLitePragmas(t *testing.T) {
 	}
 }
 
+func TestConcurrentUpsertSysSetting(t *testing.T) {
+	if err := InitDB(filepath.Join(t.TempDir(), "settings.db")); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := DB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(value int) {
+			defer wg.Done()
+			<-start
+			if err := UpsertSysSetting("shared", strconv.Itoa(value)); err != nil {
+				t.Errorf("concurrent upsert: %v", err)
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	var settings []models.SysSetting
+	if err := DB.Where("key = ?", "shared").Find(&settings).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(settings) != 1 {
+		t.Fatalf("got %d settings, want one", len(settings))
+	}
+	if err := UpsertSysSetting("shared", ""); err != nil {
+		t.Fatal(err)
+	}
+	var updated models.SysSetting
+	if err := DB.First(&updated, "key = ?", "shared").Error; err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != settings[0].ID || updated.Value != "" {
+		t.Fatalf("upsert changed the ID or ignored an empty value: %+v", updated)
+	}
+}
+
 func contains(s, sub string) bool { return len(s) >= len(sub) && (indexOf(s, sub) >= 0) }
 
 func indexOf(s, sub string) int {

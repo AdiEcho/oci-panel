@@ -1,21 +1,27 @@
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 
 /**
- * 列表多选 composable（C8）：集中「全选 / 半选 / 单项切换 / 清空」逻辑，
- * 消除 Configs.vue 与 Tasks.vue 中逐字重复的 selectedIds / isAllSelected / isIndeterminate /
- * toggle / toggleAll 实现。行为与原内联实现完全一致。
- *
- * @param items  受选列表（响应式 ref），全选/半选基于其当前长度计算
- * @param getId  从单项取出其数值 id（用作选中标识）
+ * 当前页多选。翻页、筛选或删除后移除已不可见的选项，避免批量操作误用旧页 ID。
  */
-export function useSelection<T>(items: Ref<T[]>, getId: (item: T) => number) {
-  const selectedIds = ref<number[]>([])
+export function useSelection<T>(items: Ref<T[]>, getId: (item: T) => string) {
+  const selectedIds = ref<string[]>([])
+  const visibleIds = computed(() => new Set(items.value.map(getId)))
+  const selectedCount = computed(() => selectedIds.value.filter(id => visibleIds.value.has(id)).length)
 
-  const isAllSelected = computed(() => items.value.length > 0 && selectedIds.value.length === items.value.length)
-  const isIndeterminate = computed(() => selectedIds.value.length > 0 && selectedIds.value.length < items.value.length)
+  const isAllSelected = computed(() => visibleIds.value.size > 0 && selectedCount.value === visibleIds.value.size)
+  const isIndeterminate = computed(() => selectedCount.value > 0 && selectedCount.value < visibleIds.value.size)
+
+  watch(
+    visibleIds,
+    ids => {
+      selectedIds.value = selectedIds.value.filter(id => ids.has(id))
+    },
+    { flush: 'sync' }
+  )
 
   /** 切换单项选中状态（已选则取消，未选则选中）。 */
-  const toggle = (id: number) => {
+  const toggle = (id: string) => {
+    if (!visibleIds.value.has(id)) return
     const index = selectedIds.value.indexOf(id)
     if (index === -1) selectedIds.value.push(id)
     else selectedIds.value.splice(index, 1)
@@ -24,7 +30,7 @@ export function useSelection<T>(items: Ref<T[]>, getId: (item: T) => number) {
   /** 全选 / 取消全选：当前已全选则清空，否则选中当前列表全部项。 */
   const toggleAll = () => {
     if (isAllSelected.value) selectedIds.value = []
-    else selectedIds.value = items.value.map(getId)
+    else selectedIds.value = [...visibleIds.value]
   }
 
   const clear = () => {

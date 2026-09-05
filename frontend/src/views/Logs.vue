@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, onUnmounted, nextTick } from 'vue'
 import { Wifi, WifiOff, Trash2, Terminal } from 'lucide-vue-next'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
@@ -16,9 +16,11 @@ interface LogEntry {
 const authStore = useAuthStore()
 const logs = ref<LogEntry[]>([])
 const isConnected = ref(false)
-const ws = ref<WebSocket | null>(null)
+const ws = shallowRef<WebSocket | null>(null)
 const connecting = ref(false)
 const logConsole = ref<HTMLElement>()
+let disposed = false
+let connectionAttempt = 0
 
 // 日志缓冲上限：实时日志流可能无限增长，超过上限后丢弃最旧的条目，
 // 避免 DOM 节点与内存无界膨胀导致页面卡顿。
@@ -42,7 +44,8 @@ const addLog = (message: string, type: LogEntry['type'] = 'info') => {
 }
 
 const connectWebSocket = async () => {
-  if (ws.value || connecting.value) return
+  if (disposed || ws.value || connecting.value) return
+  const attempt = ++connectionAttempt
   connecting.value = true
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 
@@ -52,44 +55,62 @@ const connectWebSocket = async () => {
       return
     }
     const ticketResponse = await sysApi.issueWebSocketTicket()
+    if (disposed || attempt !== connectionAttempt) return
     const wsUrl = `${protocol}//${window.location.host}/ws/logs?ticket=${encodeURIComponent(ticketResponse.data.ticket)}`
-    ws.value = new WebSocket(wsUrl)
+    const socket = new WebSocket(wsUrl)
+    ws.value = socket
 
-    ws.value.onopen = () => {
+    socket.onopen = () => {
+      if (ws.value !== socket) return
+      connecting.value = false
       isConnected.value = true
       addLog('WebSocket 连接成功', 'success')
       toast.success('日志连接成功')
     }
 
-    ws.value.onmessage = event => {
+    socket.onmessage = event => {
+      if (ws.value !== socket) return
       addLog(event.data, 'info')
     }
 
-    ws.value.onerror = () => {
+    socket.onerror = () => {
+      if (ws.value !== socket) return
       addLog('WebSocket 连接错误', 'error')
       toast.error('WebSocket连接错误')
     }
 
-    ws.value.onclose = () => {
+    socket.onclose = () => {
+      if (ws.value !== socket) return
+      ws.value = null
+      connecting.value = false
       isConnected.value = false
       addLog('WebSocket 连接已断开', 'warning')
     }
   } catch {
-    toast.error('无法建立WebSocket连接')
+    if (!disposed && attempt === connectionAttempt) toast.error('无法建立WebSocket连接')
   } finally {
-    connecting.value = false
+    if (attempt === connectionAttempt && !ws.value) connecting.value = false
   }
 }
 
 const disconnectWebSocket = () => {
-  if (ws.value) {
-    ws.value.close()
-    ws.value = null
+  connectionAttempt++
+  connecting.value = false
+  isConnected.value = false
+  const socket = ws.value
+  ws.value = null
+  if (socket) {
+    socket.onopen = null
+    socket.onmessage = null
+    socket.onerror = null
+    socket.onclose = null
+    socket.close()
+    if (!disposed) addLog('WebSocket 连接已断开', 'warning')
   }
 }
 
 const toggleConnection = () => {
-  if (isConnected.value) {
+  if (ws.value || connecting.value) {
     disconnectWebSocket()
     toast.info('已断开连接')
   } else {
@@ -116,6 +137,7 @@ const getLogColor = (type: LogEntry['type']) => {
 }
 
 onUnmounted(() => {
+  disposed = true
   disconnectWebSocket()
 })
 </script>
@@ -150,10 +172,10 @@ onUnmounted(() => {
           <Trash2 class="w-4 h-4" />
           清空日志
         </Button>
-        <Button :variant="isConnected ? 'destructive' : 'default'" @click="toggleConnection">
+        <Button :variant="isConnected ? 'destructive' : 'default'" :disabled="connecting" @click="toggleConnection">
           <WifiOff v-if="isConnected" class="w-4 h-4" />
           <Wifi v-else class="w-4 h-4" />
-          {{ isConnected ? '断开连接' : '连接' }}
+          {{ connecting ? '连接中...' : isConnected ? '断开连接' : '连接' }}
         </Button>
       </div>
     </div>

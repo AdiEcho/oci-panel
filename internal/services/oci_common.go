@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -21,6 +22,17 @@ import (
 type OCIService struct {
 	cfg         *config.Config
 	clientCache sync.Map
+}
+
+// Include the credential revision so an in-flight request holding an old user
+// snapshot cannot repopulate the cache entry used by updated credentials.
+type clientCacheKey struct {
+	userID      string
+	region      string
+	tenantID    string
+	ociUserID   string
+	fingerprint string
+	keyPath     string
 }
 
 type cachedClients struct {
@@ -64,19 +76,28 @@ func paginate[T any](listPage func(page *string) (items []T, nextPage *string, e
 	}
 }
 
-// waitForState 轮询 getState 直到 isReady 为真，或达到 maxAttempts 次；每次之间 sleep interval。
-// 与原「创建后轮询」循环行为一致：getState 出错时视为「尚未就绪」并继续重试（不终止）；
-// 用尽次数仍未就绪则返回 (最后一次成功取到的值, false)。调用方通常只在 ok==true 时使用返回值。
-func waitForState[T any](maxAttempts int, interval time.Duration, getState func() (T, error), isReady func(T) bool) (T, bool) {
+// waitForState 在重试间隔内也响应取消；最后一次失败后不再额外等待。
+func waitForState[T any](ctx context.Context, maxAttempts int, interval time.Duration, getState func() (T, error), isReady func(T) bool) (T, bool) {
 	var last T
 	for i := 0; i < maxAttempts; i++ {
+		if ctx.Err() != nil {
+			return last, false
+		}
 		if v, err := getState(); err == nil {
 			last = v
 			if isReady(v) {
 				return last, true
 			}
 		}
-		time.Sleep(interval)
+		if i+1 < maxAttempts {
+			timer := time.NewTimer(interval)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return last, false
+			case <-timer.C:
+			}
+		}
 	}
 	return last, false
 }
@@ -109,7 +130,10 @@ func (s *OCIService) getCachedClients(user *models.OciUser) (*cachedClients, err
 // 复用同一组 OCI 客户端与 configProvider，避免每次重新读取磁盘私钥并重建客户端。
 // 当 region == user.OciRegion 时，与 getCachedClients 命中同一缓存条目。
 func (s *OCIService) getCachedClientsForRegion(user *models.OciUser, region string) (*cachedClients, error) {
-	cacheKey := user.ID + ":" + region
+	cacheKey := clientCacheKey{
+		userID: user.ID, region: region, tenantID: user.OciTenantID,
+		ociUserID: user.OciUserID, fingerprint: user.OciFingerprint, keyPath: user.OciKeyPath,
+	}
 	if cached, ok := s.clientCache.Load(cacheKey); ok {
 		return cached.(*cachedClients), nil
 	}
@@ -350,7 +374,7 @@ func (s *OCIService) GetIdentityClientForRegion(user *models.OciUser, region str
 // InvalidateClientCache removes cached clients for a user (call when credentials change)
 func (s *OCIService) InvalidateClientCache(userID string) {
 	s.clientCache.Range(func(key, value any) bool {
-		if k, ok := key.(string); ok && len(k) > len(userID) && k[:len(userID)] == userID {
+		if k, ok := key.(clientCacheKey); ok && k.userID == userID {
 			s.clientCache.Delete(key)
 		}
 		return true

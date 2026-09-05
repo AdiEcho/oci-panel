@@ -2,7 +2,7 @@ import { post, type PageResult } from './http'
 
 /** 实例创建任务列表项。 */
 export interface TaskItem {
-  id: number
+  id: string
   username: string
   ociRegion: string
   architecture: string
@@ -20,15 +20,15 @@ export interface TaskItem {
 
 /** 任务执行日志。 */
 export interface TaskLog {
-  id: number
+  id: string
   status: string
   message: string
   executeTime: string
 }
 
-/** 创建实例任务的入参（userId 来自配置 id，可能为 number/undefined）。 */
+/** 创建实例任务的入参，配置与密钥 ID 均为后端生成的 UUID。 */
 export interface CreateTaskReq {
-  userId: number | string | undefined
+  userId: string
   ociRegion: string
   ocpus: number
   memory: number
@@ -45,10 +45,10 @@ export interface CreateTaskReq {
 export const taskApi = {
   create: (req: CreateTaskReq) => post('/task/create', req),
   list: (req: { page: number; pageSize: number; status?: string }) => post<PageResult<TaskItem>>('/task/list', req),
-  start: (taskId: number) => post('/task/start', { taskId }),
-  stop: (taskId: number) => post('/task/stop', { taskId }),
-  delete: (taskId: number) => post('/task/delete', { taskId }),
-  batchDelete: (taskIds: number[]) => post('/task/batchDelete', { taskIds }),
-  logs: (req: { taskId: number; page: number; pageSize: number }) => post<PageResult<TaskLog>>('/task/logs', req),
-  clearLogs: (taskId: number) => post('/task/clearLogs', { taskId })
+  start: (taskId: string) => post('/task/start', { taskId }),
+  stop: (taskId: string) => post('/task/stop', { taskId }),
+  delete: (taskId: string) => post('/task/delete', { taskId }),
+  batchDelete: (taskIds: string[]) => post('/task/batchDelete', { taskIds }),
+  logs: (req: { taskId: string; page: number; pageSize: number }) => post<PageResult<TaskLog>>('/task/logs', req),
+  clearLogs: (taskId: string) => post('/task/clearLogs', { taskId })
 }

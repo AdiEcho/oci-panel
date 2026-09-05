@@ -102,24 +102,22 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		CreateTime:      time.Now(),
 	}
 
-	if req.ExecuteOnce {
-		// 只执行一次模式：先创建任务记录，然后立即执行
-		if err := database.GetDB().Create(task).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "创建任务失败"))
-			return
-		}
-		// 立即执行一次
-		if err := tc.taskService.ExecuteTaskOnce(task.ID); err != nil {
-			c.JSON(http.StatusOK, models.ErrorResponse(500, err.Error()))
-			return
-		}
-		c.JSON(http.StatusOK, models.SuccessResponse(task, "实例创建成功"))
+	if err := tc.taskService.AddTask(task); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "创建任务失败"))
 		return
 	}
 
-	// 定时任务模式
-	if err := tc.taskService.AddTask(task); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "创建任务失败"))
+	if req.ExecuteOnce {
+		// 立即执行一次
+		if err := tc.taskService.ExecuteTaskOnce(c.Request.Context(), task.ID); err != nil {
+			c.JSON(http.StatusOK, models.ErrorResponse(500, err.Error()))
+			return
+		}
+		if err := database.GetDB().First(task, "id = ?", task.ID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "读取任务结果失败"))
+			return
+		}
+		c.JSON(http.StatusOK, models.SuccessResponse(task, "实例创建成功"))
 		return
 	}
 
@@ -155,9 +153,15 @@ func (tc *TaskController) TaskList(c *gin.Context) {
 		query = query.Where("status = ?", req.Status)
 	}
 
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "查询任务失败"))
+		return
+	}
 	offset := (req.Page - 1) * req.PageSize
-	query.Order("create_time DESC").Limit(req.PageSize).Offset(offset).Find(&tasks)
+	if err := query.Order("create_time DESC").Limit(req.PageSize).Offset(offset).Find(&tasks).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, "查询任务失败"))
+		return
+	}
 
 	list := make([]models.TaskListResponse, len(tasks))
 	for i, t := range tasks {

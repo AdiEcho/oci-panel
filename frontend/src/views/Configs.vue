@@ -16,7 +16,7 @@ import {
   Check,
   MoreHorizontal
 } from 'lucide-vue-next'
-import { ociApi, taskApi, presetApi, keyApi } from '@/api'
+import { ociApi, taskApi, presetApi, keyApi, type KeyItem, type ImageInfo, type Preset } from '@/api'
 import { toast } from '@/composables/useToast'
 import { useSelection } from '@/composables/useSelection'
 import { usePagination } from '@/composables/usePagination'
@@ -33,28 +33,6 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } fr
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
 import type { Config } from '@/views/configs/types'
 import ConfigDetailsDrawer from './configs/components/ConfigDetailsDrawer.vue'
-
-interface SSHKey {
-  id: number
-  name: string
-}
-interface Image {
-  id: string
-  operatingSystem: string
-  operatingSystemVersion: string
-}
-interface Preset {
-  id: string
-  name: string
-  ocpus: number
-  memory: number
-  disk: number
-  bootVolumeVpu: number
-  architecture: string
-  operationSystem: string
-  imageId: string
-  sshKeyId: string
-}
 
 // 配置列表状态
 const configs = ref<Config[]>([])
@@ -104,9 +82,9 @@ const instanceForm = ref({
   interval: 60,
   isTaskMode: true
 })
-const sshKeys = ref<SSHKey[]>([])
-const availableImages = ref<Image[]>([])
-const filteredImages = ref<Image[]>([])
+const sshKeys = ref<KeyItem[]>([])
+const availableImages = ref<ImageInfo[]>([])
+const filteredImages = ref<ImageInfo[]>([])
 const presets = ref<Preset[]>([])
 const selectedPresetId = ref('')
 
@@ -180,7 +158,7 @@ const applyPreset = (presetId: string) => {
   }
 }
 
-const loadImages = async (configId: number, region: string, architecture: string) => {
+const loadImages = async (configId: string, region: string, architecture: string) => {
   if (!configId || !region || !architecture) return
   loadingImages.value = true
   try {
@@ -276,7 +254,7 @@ const editConfig = (config: Config) => {
   showAddModal.value = true
 }
 
-const deleteConfig = async (id: number) => {
+const deleteConfig = async (id: string) => {
   if (!confirm('确定要删除此配置吗？')) return
   try {
     await ociApi.removeCfg([id])
@@ -323,6 +301,11 @@ const onOperationSystemChange = () => {
 }
 
 const submitInstanceTask = async () => {
+  const config = selectedConfigForInstance.value
+  if (!config) {
+    toast.warning('请先选择配置')
+    return
+  }
   if (!instanceForm.value.sshKeyId) {
     toast.warning('请选择SSH公钥')
     return
@@ -330,7 +313,7 @@ const submitInstanceTask = async () => {
   submittingInstance.value = true
   try {
     await taskApi.create({
-      userId: selectedConfigForInstance.value?.id,
+      userId: config.id,
       ociRegion: instanceForm.value.ociRegion,
       ocpus: instanceForm.value.ocpus,
       memory: instanceForm.value.memory,

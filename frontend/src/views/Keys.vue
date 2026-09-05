@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Plus, Search, Trash2, Edit, Copy, ChevronLeft, ChevronRight, Loader2, Key } from 'lucide-vue-next'
-import { keyApi } from '@/api'
+import { keyApi, type KeyItem } from '@/api'
 import { toast } from '@/composables/useToast'
 import { usePagination } from '@/composables/usePagination'
 import { copyToClipboard, truncateId, debounce } from '@/lib/utils'
@@ -13,15 +13,6 @@ import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-
-interface KeyItem {
-  id: number
-  name: string
-  keyType: string
-  publicKey: string
-  configName?: string
-  createTime: string
-}
 
 const keys = ref<KeyItem[]>([])
 const loading = ref(false)
@@ -99,7 +90,7 @@ const editKey = (key: KeyItem) => {
   showAddModal.value = true
 }
 
-const deleteKey = async (id: number) => {
+const deleteKey = async (id: string) => {
   if (!confirm('确定要删除此密钥吗？')) return
   try {
     await keyApi.delete([id])

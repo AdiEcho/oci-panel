@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Play, Square, Trash2, FileText, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-vue-next'
-import { taskApi } from '@/api'
+import { taskApi, type TaskItem as Task, type TaskLog } from '@/api'
 import { toast } from '@/composables/useToast'
 import { useSelection } from '@/composables/useSelection'
 import { usePagination } from '@/composables/usePagination'
@@ -12,30 +12,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-
-interface Task {
-  id: number
-  username: string
-  ociRegion: string
-  architecture: string
-  operationSystem: string
-  ocpus: number
-  memory: number
-  disk: number
-  interval: number
-  status: string
-  executeCount: number
-  successCount: number
-  lastExecuteTime?: string
-  lastMessage?: string
-}
-
-interface TaskLog {
-  id: number
-  status: string
-  message: string
-  executeTime: string
-}
 
 const tasks = ref<Task[]>([])
 const loading = ref(false)
@@ -49,7 +25,7 @@ const {
   toggleAll: toggleSelectAll,
   clear: clearSelection
 } = useSelection(tasks, t => t.id)
-const actionLoading = ref<Record<number, boolean>>({})
+const actionLoading = ref<Record<string, boolean>>({})
 
 const showLogsModal = ref(false)
 const currentTask = ref<Task | null>(null)
@@ -101,7 +77,7 @@ const loadTasks = async (page = 1) => {
   }
 }
 
-const startTask = async (taskId: number) => {
+const startTask = async (taskId: string) => {
   actionLoading.value[taskId] = true
   try {
     await taskApi.start(taskId)
@@ -114,7 +90,7 @@ const startTask = async (taskId: number) => {
   }
 }
 
-const stopTask = async (taskId: number) => {
+const stopTask = async (taskId: string) => {
   actionLoading.value[taskId] = true
   try {
     await taskApi.stop(taskId)
@@ -127,7 +103,7 @@ const stopTask = async (taskId: number) => {
   }
 }
 
-const deleteTask = async (taskId: number) => {
+const deleteTask = async (taskId: string) => {
   if (!confirm('确定要删除此任务吗？相关日志也将被删除。')) return
   actionLoading.value[taskId] = true
   try {

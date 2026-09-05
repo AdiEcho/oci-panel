@@ -2,7 +2,7 @@ import { get, post, type PageResult, type ValueLabel } from './http'
 
 /** OCI 配置（账号凭据）列表项。 */
 export interface ConfigItem {
-  id: number
+  id: string
   username: string
   tenantName?: string
   tenantCreateTime?: string
@@ -17,7 +17,7 @@ export interface ConfigItem {
 
 /** 配置详情（基础信息；其余字段由后端补充，故带索引签名保持宽松）。 */
 export interface ConfigDetails {
-  userId: string | number
+  userId: string
   username: string
   region: string
   fingerprint: string
@@ -117,44 +117,31 @@ export const ociApi = {
     ociRegion: string
     ociKeyPath: string
   }) => post('/oci/addCfg', req),
-  updateCfgName: (req: { id: number; username: string; ociKeyPath?: string }) => post('/oci/updateCfgName', req),
-  removeCfg: (ids: number[]) => post('/oci/removeCfg', { ids }),
+  updateCfgName: (req: { id: string; username: string; ociKeyPath?: string }) => post('/oci/updateCfgName', req),
+  removeCfg: (ids: string[]) => post('/oci/removeCfg', { ids }),
 
-  details: (configId: number | string) => post<ConfigDetails>('/oci/details', { configId }),
-  detailsInstances: (req: { configId: string | number; clearCache?: boolean }) =>
+  details: (configId: string) => post<ConfigDetails>('/oci/details', { configId }),
+  detailsInstances: (req: { configId: string; clearCache?: boolean }) =>
     post<InstanceInfo[]>('/oci/details/instances', req),
-  detailsVolumes: (req: { configId: string | number; clearCache?: boolean }) =>
-    post<VolumeInfo[]>('/oci/details/volumes', req),
-  detailsVCNs: (req: { configId: string | number; clearCache?: boolean }) => post<VCNInfo[]>('/oci/details/vcns', req),
+  detailsVolumes: (req: { configId: string; clearCache?: boolean }) => post<VolumeInfo[]>('/oci/details/volumes', req),
+  detailsVCNs: (req: { configId: string; clearCache?: boolean }) => post<VCNInfo[]>('/oci/details/vcns', req),
 
-  tenantInfo: (req: { configId: string | number; clearCache?: boolean }) => post<TenantInfo>('/oci/tenant/info', req),
-  updatePwdEx: (req: { cfgId: string | number; passwordExpiresAfter: number }) => post('/oci/tenant/updatePwdEx', req),
-  updateUserInfo: (req: {
-    ociCfgId: string | number
-    userId: string
-    email: string
-    dbUserName: string
-    description: string
-  }) => post('/oci/tenant/updateUserInfo', req),
-  resetPassword: (req: { ociCfgId: string | number; userId: string }) => post('/oci/tenant/resetPassword', req),
-  deleteMfaDevice: (req: { ociCfgId: string | number; userId: string }) => post('/oci/tenant/deleteMfaDevice', req),
-  deleteApiKey: (req: { ociCfgId: string | number; userId: string }) => post('/oci/tenant/deleteApiKey', req),
-  deleteUser: (req: { ociCfgId: string | number; userId: string }) => post('/oci/tenant/deleteUser', req),
+  tenantInfo: (req: { configId: string; clearCache?: boolean }) => post<TenantInfo>('/oci/tenant/info', req),
+  updatePwdEx: (req: { cfgId: string; passwordExpiresAfter: number }) => post('/oci/tenant/updatePwdEx', req),
+  updateUserInfo: (req: { ociCfgId: string; userId: string; email: string; dbUserName: string; description: string }) =>
+    post('/oci/tenant/updateUserInfo', req),
+  resetPassword: (req: { ociCfgId: string; userId: string }) => post('/oci/tenant/resetPassword', req),
+  deleteMfaDevice: (req: { ociCfgId: string; userId: string }) => post('/oci/tenant/deleteMfaDevice', req),
+  deleteApiKey: (req: { ociCfgId: string; userId: string }) => post('/oci/tenant/deleteApiKey', req),
+  deleteUser: (req: { ociCfgId: string; userId: string }) => post('/oci/tenant/deleteUser', req),
 
-  images: (req: { configId: string | number; region: string; architecture: string }) =>
-    post<ImageInfo[]>('/oci/images', req),
+  images: (req: { configId: string; region: string; architecture: string }) => post<ImageInfo[]>('/oci/images', req),
 
-  trafficCondition: (configId: string | number) =>
-    get<TrafficCondition>('/oci/traffic/condition', { params: { configId } }),
-  trafficVnics: (req: { configId: string | number; instanceId: string }) =>
+  trafficCondition: (configId: string) => get<TrafficCondition>('/oci/traffic/condition', { params: { configId } }),
+  trafficVnics: (req: { configId: string; instanceId: string }) =>
     get<ValueLabel[]>('/oci/traffic/vnics', { params: req }),
-  trafficData: (req: {
-    configId: string | number
-    instanceId: string
-    vnicId: string
-    startTime: string
-    endTime: string
-  }) => post<TrafficData>('/oci/traffic/data', req)
+  trafficData: (req: { configId: string; instanceId: string; vnicId: string; startTime: string; endTime: string }) =>
+    post<TrafficData>('/oci/traffic/data', req)
 }
 
 /** VCN 安全规则相关接口（独立分组）。 */

@@ -1,6 +1,17 @@
 import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/composables/useToast'
+
+interface ApiAuth {
+  getToken: () => string
+  onUnauthorized: () => void
+}
+
+let auth: ApiAuth | undefined
+
+// 应用入口装配认证回调，HTTP 层不再反向导入依赖 API 的 Pinia store。
+export function configureApiAuth(handlers: ApiAuth) {
+  auth = handlers
+}
 
 const api = axios.create({
   baseURL: '/api',
@@ -12,9 +23,9 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
-    const authStore = useAuthStore()
-    if (authStore.token) {
-      config.headers.Authorization = `Bearer ${authStore.token}`
+    const token = auth?.getToken()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -38,9 +49,7 @@ api.interceptors.response.use(
       const { status, data } = error.response
 
       if (status === 401) {
-        const authStore = useAuthStore()
-        authStore.logout()
-        window.location.href = '/login'
+        auth?.onUnauthorized()
         return Promise.reject(new Error('登录已过期，请重新登录'))
       }
 

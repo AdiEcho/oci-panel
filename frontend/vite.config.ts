@@ -12,12 +12,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
+        target: 'http://localhost:8999',
+        changeOrigin: true
       },
       '/ws': {
-        target: 'ws://localhost:8080',
-        ws: true,
+        target: 'ws://localhost:8999',
+        ws: true
       }
     }
   },
@@ -26,7 +26,12 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('vue') || id.includes('pinia') || id.includes('vue-router')) {
+            if (
+              id.includes('/node_modules/vue/') ||
+              id.includes('/node_modules/@vue/') ||
+              id.includes('/node_modules/pinia/') ||
+              id.includes('/node_modules/vue-router/')
+            ) {
               return 'vendor-vue'
             }
             if (id.includes('lucide') || id.includes('motion') || id.includes('radix')) {
@@ -36,9 +41,6 @@ export default defineConfig({
           }
           if (id.includes('/components/ui/')) {
             return 'ui-components'
-          }
-          if (id.includes('/views/')) {
-            return 'views'
           }
         },
         chunkFileNames: 'assets/[name]-[hash].js',

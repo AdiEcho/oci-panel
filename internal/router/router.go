@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/adiecho/oci-panel/internal/config"
 	"github.com/adiecho/oci-panel/internal/controllers"
+	"github.com/adiecho/oci-panel/internal/database"
 	"github.com/adiecho/oci-panel/internal/middleware"
 	"github.com/adiecho/oci-panel/internal/services"
 	"github.com/gin-gonic/gin"
@@ -33,7 +34,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 	ipService := services.NewIpService(ociService)
 	wsService := services.NewWebSocketService()
 	schedulerService := services.NewSchedulerService(ociService)
-	taskService := services.NewTaskService(ociService)
+	taskService := services.NewTaskService(database.GetDB(), ociService)
 	telegramService := services.NewTelegramService(ociService)
 
 	wsCtrl := controllers.NewWebSocketController(wsService, cfg.Web.AllowOrigins)
@@ -68,6 +69,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			passkey.POST("/disable", passkeyCtrl.Disable)
 		}
 
+		taskCtrl := controllers.NewTaskController(taskService)
 		ociCtrl := controllers.NewOciController(ociService, schedulerService)
 		oci := api.Group("/oci")
 		{
@@ -75,7 +77,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			oci.POST("/addCfg", ociCtrl.AddCfg)
 			oci.POST("/updateCfgName", ociCtrl.UpdateCfgName)
 			oci.POST("/removeCfg", ociCtrl.RemoveCfg)
-			oci.POST("/createInstance", ociCtrl.CreateInstance)
+			oci.POST("/createInstance", taskCtrl.CreateTask)
 			oci.POST("/createTaskPage", ociCtrl.CreateTaskPage)
 			oci.POST("/uploadKey", ociCtrl.UploadKey)
 			oci.POST("/details", ociCtrl.GetConfigDetails)
@@ -143,7 +145,6 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			key.GET("/detail", keyCtrl.GetKeyByID)
 		}
 
-		taskCtrl := controllers.NewTaskController(taskService)
 		task := api.Group("/task")
 		{
 			task.POST("/create", taskCtrl.CreateTask)

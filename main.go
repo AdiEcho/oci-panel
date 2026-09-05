@@ -28,7 +28,9 @@ func main() {
 	defer services.Scheduler.Stop()
 
 	// 启动创建实例任务服务
-	services.Task.Start()
+	if err := services.Task.Start(); err != nil {
+		log.Fatalf("Failed to start task service: %v", err)
+	}
 	defer services.Task.Stop()
 
 	// 启动 Telegram Bot（如果已配置并启用）

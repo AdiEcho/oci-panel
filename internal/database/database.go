@@ -9,6 +9,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -70,17 +71,10 @@ func GetDB() *gorm.DB {
 	return DB
 }
 
-// UpsertSysSetting 按 key 写入系统设置：已存在则更新 value，不存在则以随机 ID 新建。
-// 统一此前散落在 sys_controller / passkey_controller / scheduler_service / telegram_service
-// 的「First → Create 或 Update」重复 upsert 逻辑。查询与更新均以 key 为准，ID 仅作主键占位。
+// UpsertSysSetting 用唯一键冲突更新原子写入，避免并发首次保存时争抢同一 key。
 func UpsertSysSetting(key, value string) error {
-	var setting models.SysSetting
-	if err := DB.Where("key = ?", key).First(&setting).Error; err != nil {
-		return DB.Create(&models.SysSetting{
-			ID:    uuid.New().String(),
-			Key:   key,
-			Value: value,
-		}).Error
-	}
-	return DB.Model(&setting).Update("value", value).Error
+	return DB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(&models.SysSetting{ID: uuid.New().String(), Key: key, Value: value}).Error
 }
