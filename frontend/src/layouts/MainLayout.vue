@@ -16,7 +16,7 @@ import {
   User,
   Clock,
   Package
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'

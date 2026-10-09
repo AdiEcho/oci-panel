@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Play, Square, Trash2, FileText, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-vue-next'
+import { Play, Square, Trash2, FileText, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from '@lucide/vue'
 import { taskApi, type TaskItem as Task, type TaskLog } from '@/api'
 import { toast } from '@/composables/useToast'
 import { useSelection } from '@/composables/useSelection'

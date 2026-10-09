@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, Mail, Edit, KeyRound, LockKeyhole, ShieldOff, Trash2 } from 'lucide-vue-next'
+import { Users, Mail, Edit, KeyRound, LockKeyhole, ShieldOff, Trash2 } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

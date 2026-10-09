@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, HardDrive, Edit } from 'lucide-vue-next'
+import { Loader2, HardDrive, Edit } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
-import { Loader2, AlertTriangle, Settings, HardDrive, Globe, Wrench, Zap } from 'lucide-vue-next'
+import { Loader2, AlertTriangle, Settings, HardDrive, Globe, Wrench, Zap } from '@lucide/vue'
 import { instanceApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'

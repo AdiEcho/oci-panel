@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Loader2, Settings, Copy, Edit, Check, X } from 'lucide-vue-next'
+import { Loader2, Settings, Copy, Edit, Check, X } from '@lucide/vue'
 import { ociApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Card } from '@/components/ui/card'

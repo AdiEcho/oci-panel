@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Server, Play, Square, RotateCcw, Globe, Settings, Terminal, Trash2 } from 'lucide-vue-next'
+import { Loader2, Server, Play, Square, RotateCcw, Globe, Settings, Terminal, Trash2 } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, shallowRef, onUnmounted, nextTick } from 'vue'
-import { Wifi, WifiOff, Trash2, Terminal } from 'lucide-vue-next'
+import { Wifi, WifiOff, Trash2, Terminal } from '@lucide/vue'
 import { toast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

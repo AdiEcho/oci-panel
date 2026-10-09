@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
-import { Loader2, Shield, Plus, Unlock, Trash2 } from 'lucide-vue-next'
+import { Loader2, Shield, Plus, Unlock, Trash2 } from '@lucide/vue'
 import { vcnApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'

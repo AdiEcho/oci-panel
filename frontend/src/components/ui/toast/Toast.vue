@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { X, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-vue-next'
+import { X, CheckCircle, XCircle, AlertTriangle, Info } from '@lucide/vue'
 import { cn } from '@/lib/utils'
 
 interface Props {

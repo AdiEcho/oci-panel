@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, Search, Trash2, Edit, Copy, ChevronLeft, ChevronRight, Loader2, Key } from 'lucide-vue-next'
+import { Plus, Search, Trash2, Edit, Copy, ChevronLeft, ChevronRight, Loader2, Key } from '@lucide/vue'
 import { keyApi, type KeyItem } from '@/api'
 import { toast } from '@/composables/useToast'
 import { usePagination } from '@/composables/usePagination'

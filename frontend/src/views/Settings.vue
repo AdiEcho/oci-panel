@@ -4,7 +4,6 @@ import {
   Info,
   Database,
   RefreshCw,
-  Github,
   FileText,
   Server,
   Code,
@@ -21,7 +20,8 @@ import {
   Fingerprint,
   KeyRound,
   Trash2
-} from 'lucide-vue-next'
+} from '@lucide/vue'
+import GithubIcon from '@/components/icons/GithubIcon.vue'
 import { sysApi, telegramApi, passkeyApi } from '@/api'
 import { createPasskeyCredential } from '@/lib/webauthn'
 import { toast } from '@/composables/useToast'
@@ -699,7 +699,7 @@ const systemInfo = [
           </p>
           <div class="flex gap-3">
             <Button variant="outline" as="a" href="https://github.com" target="_blank">
-              <Github class="w-4 h-4" />
+              <GithubIcon class="w-4 h-4" />
               GitHub
             </Button>
             <Button variant="outline" as="a" href="https://docs.oracle.com/iaas" target="_blank">

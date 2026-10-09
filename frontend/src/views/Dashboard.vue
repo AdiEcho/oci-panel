@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Settings2, ListTodo, Plus, Server, ArrowRight, Activity, TrendingUp, Zap } from 'lucide-vue-next'
+import { Settings2, ListTodo, Plus, Server, ArrowRight, Activity, TrendingUp, Zap } from '@lucide/vue'
 import { sysApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

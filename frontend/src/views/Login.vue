@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMotion } from '@vueuse/motion'
-import { Cloud, Lock, User, ArrowRight, Loader2, Shield, Fingerprint } from 'lucide-vue-next'
+import { Cloud, Lock, User, ArrowRight, Loader2, Shield, Fingerprint } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'

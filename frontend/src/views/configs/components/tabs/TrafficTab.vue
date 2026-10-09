@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, BarChart3 } from 'lucide-vue-next'
+import { Loader2, BarChart3 } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

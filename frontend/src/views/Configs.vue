@@ -15,7 +15,7 @@ import {
   X,
   Check,
   MoreHorizontal
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { ociApi, taskApi, presetApi, keyApi, type KeyItem, type ImageInfo, type Preset } from '@/api'
 import { toast } from '@/composables/useToast'
 import { useSelection } from '@/composables/useSelection'

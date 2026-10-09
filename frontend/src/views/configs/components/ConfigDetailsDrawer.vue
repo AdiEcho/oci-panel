@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
-import { X, Loader2, RefreshCw, Settings, Server, HardDrive, Network, BarChart3 } from 'lucide-vue-next'
+import { X, Loader2, RefreshCw, Settings, Server, HardDrive, Network, BarChart3 } from '@lucide/vue'
 import { ociApi, instanceApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'

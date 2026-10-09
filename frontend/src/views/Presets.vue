@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useMotion } from '@vueuse/motion'
 import { RouterLink } from 'vue-router'
-import { Plus, Trash2, Edit, Loader2, Package, Cpu, HardDrive, MemoryStick, Key, MoreHorizontal } from 'lucide-vue-next'
+import { Plus, Trash2, Edit, Loader2, Package, Cpu, HardDrive, MemoryStick, Key, MoreHorizontal } from '@lucide/vue'
 import { presetApi, keyApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Card, CardContent } from '@/components/ui/card'
