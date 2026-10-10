@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Server, Play, Square, RotateCcw, Globe, Settings, Terminal, Trash2, Copy, Zap } from '@lucide/vue'
+import { Loader2, Server, Play, Square, RotateCcw, Globe, Settings, Terminal, Trash2, Copy, Zap, AlertTriangle } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -182,6 +182,63 @@ const handleChangeIpClick = (instance: Instance) => {
           <p class="text-xs text-muted-foreground">当前配置已生效，正在核验外部 NLB 访问地址，请稍候刷新。</p>
           <div class="text-[11px] text-muted-foreground">
             实例原公网 IP: {{ instance.publicIps?.join(', ') || '无' }}
+          </div>
+        </div>
+
+        <!-- 500Mbps 操作执行中 -->
+        <div
+          v-else-if="
+            instance.bandwidth500?.status === 'enabling' ||
+            instance.bandwidth500?.status === 'disabling' ||
+            instance.bandwidth500?.status === 'migrating'
+          "
+          class="bg-info/10 border border-info/30 rounded-lg p-3 col-span-2 space-y-1.5"
+        >
+          <div class="flex items-center justify-between text-info text-xs font-semibold">
+            <span class="flex items-center gap-1.5">
+              <Loader2 class="w-3.5 h-3.5 animate-spin" />
+              500Mbps 任务执行中 ({{ instance.bandwidth500.status }})
+            </span>
+            <Badge variant="info" class="text-[11px] py-0 px-2 h-5">配置中</Badge>
+          </div>
+          <p class="text-xs text-muted-foreground">正在与 OCI 云端配置负载均衡器与路由，请稍候...</p>
+          <div class="text-[11px] text-muted-foreground">
+            实例原公网 IP: {{ instance.publicIps?.join(', ') || '无' }}
+          </div>
+        </div>
+
+        <!-- 500Mbps 异常或配额超限 -->
+        <div
+          v-else-if="
+            instance.bandwidth500?.status === 'repair-required' || instance.bandwidth500?.status === 'failed'
+          "
+          class="bg-destructive/10 border border-destructive/30 rounded-lg p-3 col-span-2 space-y-2"
+        >
+          <div class="flex items-center justify-between text-destructive text-xs font-semibold">
+            <span class="flex items-center gap-1.5">
+              <AlertTriangle class="w-3.5 h-3.5" />
+              500Mbps 开启失败 / 配额超限
+            </span>
+            <Badge variant="destructive" class="text-[11px] py-0 px-2 h-5">需关注</Badge>
+          </div>
+          <p
+            class="text-xs text-muted-foreground line-clamp-2"
+            :title="instance.bandwidth500.actionBlockedReason || instance.bandwidth500.lastError"
+          >
+            {{ instance.bandwidth500.actionBlockedReason || instance.bandwidth500.lastError || 'NLB 配额超限或云端网络配置异常' }}
+          </p>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-[11px] text-muted-foreground">
+              实例原公网 IP: {{ instance.publicIps?.join(', ') || '无' }}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              class="h-6 text-xs px-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+              @click="$emit('edit', instance)"
+            >
+              查看并修复
+            </Button>
           </div>
         </div>
 

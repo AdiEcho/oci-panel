@@ -39,6 +39,7 @@ type Bandwidth500Binding struct {
 	Status           string    `gorm:"column:status;type:varchar(32);index" json:"status"`         // enabled, disabled, repair-required, migrating, enabling, disabling
 	ObservedHealth   string    `gorm:"column:observed_health;type:varchar(32)" json:"observedHealth"`
 	ObservedIP       string    `gorm:"column:observed_ip;type:varchar(64)" json:"observedIp"`
+	LastError        string    `gorm:"column:last_error;type:text" json:"lastError,omitempty"`
 	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
@@ -87,7 +88,10 @@ type Bandwidth500Summary struct {
 	CanEnable           bool                   `json:"canEnable"`
 	CanDisable          bool                   `json:"canDisable"`
 	ActionBlockedReason string                 `json:"actionBlockedReason,omitempty"`
+	LastError           string                 `json:"lastError,omitempty"`
 	OperationID         string                 `json:"operationId,omitempty"`
+	OperationStatus     string                 `json:"operationStatus,omitempty"`
+	OperationMessage    string                 `json:"operationMessage,omitempty"`
 	StatusVersion       string                 `json:"statusVersion,omitempty"`
 	ObservedAt          string                 `json:"observedAt,omitempty"`
 	Freshness           string                 `json:"freshness"` // fresh, stale

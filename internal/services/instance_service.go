@@ -315,6 +315,17 @@ func (s *InstanceService) MigrateLegacyNlbToShared(userId string, req MigrateLeg
 	return bwService.MigrateLegacyNlbToShared(context.Background(), &user, req)
 }
 
+// Reset500MbpsStatus 清除实例的 500Mbps 异常状态或失败记录
+func (s *InstanceService) Reset500MbpsStatus(userId string, instanceId string) error {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.Reset500MbpsStatus(context.Background(), &user, instanceId)
+}
+
 // DecorateInstancesWith500Mbps 为实例列表补充 500Mbps 状态摘要
 func (s *InstanceService) DecorateInstancesWith500Mbps(user *models.OciUser, instances []models.InstanceInfo) []models.InstanceInfo {
 	bwService := GetBandwidth500Service(s.ociService)

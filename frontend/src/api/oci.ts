@@ -33,7 +33,7 @@ export interface Bandwidth500Endpoint {
 }
 
 export interface Bandwidth500Summary {
-  status: string // enabled, disabled, enabling, disabling, repair-required, unknown
+  status: string // enabled, disabled, enabling, disabling, repair-required, failed, unknown
   enabled: boolean | null
   mode?: string // dedicated, shared-ports
   source?: string // binding, legacy-verified, unknown
@@ -46,12 +46,38 @@ export interface Bandwidth500Summary {
   canEnable: boolean
   canDisable: boolean
   actionBlockedReason?: string
+  lastError?: string
   operationId?: string
+  operationStatus?: string
+  operationMessage?: string
   statusVersion?: string
   observedAt?: string
   freshness?: string
   sharedMemberCount?: number
   canMigrateToShared?: boolean
+}
+
+export interface Bandwidth500PlanResponse {
+  planId: string
+  instanceId: string
+  mode: string
+  currentStatus: string
+  vcnId: string
+  subnetId: string
+  canReuseNat: boolean
+  natGatewayId?: string
+  canReuseNlb: boolean
+  nlbId?: string
+  nlbAccessIp?: string
+  effectiveMappings: Bandwidth500Endpoint[]
+  portConflicts?: string[]
+  requiresMigration: boolean
+  migrationInstanceId?: string
+  existingNlbCount: number
+  quotaRisk: boolean
+  warnings?: string[]
+  supported: boolean
+  reason?: string
 }
 
 /** 实例信息（详情页实例列表项）。 */

@@ -226,6 +226,25 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 	falseVal := false
 	trueVal := true
 
+	decorateSummaryWithOp := func(sum *models.Bandwidth500Summary) *models.Bandwidth500Summary {
+		if sum == nil {
+			return nil
+		}
+		var lastOp models.Bandwidth500Operation
+		if err := database.GetDB().Where("instance_id = ?", instanceID).Order("created_at desc").First(&lastOp).Error; err == nil {
+			sum.OperationID = lastOp.ID
+			sum.OperationStatus = lastOp.Status
+			sum.OperationMessage = lastOp.Message
+			if sum.LastError == "" && lastOp.Error != "" {
+				sum.LastError = lastOp.Error
+			}
+			if sum.ActionBlockedReason == "" && lastOp.Error != "" && sum.Status != StatusEnabled {
+				sum.ActionBlockedReason = lastOp.Error
+			}
+		}
+		return sum
+	}
+
 	// 1. 检查机型
 	instance, err := s.ociService.GetInstanceById(user, instanceID)
 	if err != nil {
@@ -238,7 +257,7 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 	}
 	isAMD := strings.Contains(shape, "E2.1.Micro")
 	if !isAMD {
-		return &models.Bandwidth500Summary{
+		return decorateSummaryWithOp(&models.Bandwidth500Summary{
 			Status:              StatusDisabled,
 			Enabled:             &falseVal,
 			CanEnable:           false,
@@ -248,7 +267,7 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 			Connectivity:        "unverified",
 			Freshness:           "fresh",
 			ObservedAt:          time.Now().UTC().Format(time.RFC3339),
-		}, nil
+		}), nil
 	}
 
 	// 2. 先查数据库是否有活跃/中间状态绑定
@@ -257,7 +276,7 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 	if dbErr == nil {
 		// 数据库中存在记录
 		if binding.Status == StatusEnabling || binding.Status == StatusDisabling || binding.Status == StatusMigrating {
-			return &models.Bandwidth500Summary{
+			return decorateSummaryWithOp(&models.Bandwidth500Summary{
 				Status:              binding.Status,
 				Enabled:             nil, // 未完成状态不为 true 也不为 false
 				Mode:                binding.Mode,
@@ -271,7 +290,30 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 				Connectivity:        "unverified",
 				Freshness:           "fresh",
 				ObservedAt:          time.Now().UTC().Format(time.RFC3339),
-			}, nil
+			}), nil
+		}
+
+		if binding.Status == StatusRepairRequired || binding.Status == "failed" {
+			reason := binding.LastError
+			if reason == "" {
+				reason = "500Mbps 配置未完成或已中断，需要重新配置或检查配额"
+			}
+			return decorateSummaryWithOp(&models.Bandwidth500Summary{
+				Status:              binding.Status,
+				Enabled:             &falseVal,
+				Mode:                binding.Mode,
+				Source:              "binding",
+				NlbID:               binding.NlbID,
+				AccessIP:            binding.ObservedIP,
+				CanEnable:           true,
+				CanDisable:          binding.RouteTableID != "",
+				ActionBlockedReason: reason,
+				LastError:           binding.LastError,
+				Health:              "unhealthy",
+				Connectivity:        "unverified",
+				Freshness:           "fresh",
+				ObservedAt:          time.Now().UTC().Format(time.RFC3339),
+			}), nil
 		}
 
 		if binding.Status == StatusEnabled {
@@ -296,7 +338,7 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 					var memberCount int64
 					database.GetDB().Model(&models.Bandwidth500Binding{}).Where("nlb_id = ? AND status = ?", binding.NlbID, StatusEnabled).Count(&memberCount)
 
-					return &models.Bandwidth500Summary{
+					return decorateSummaryWithOp(&models.Bandwidth500Summary{
 						Status:             StatusEnabled,
 						Enabled:            &trueVal,
 						Mode:               binding.Mode,
@@ -312,12 +354,12 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 						ObservedAt:         time.Now().UTC().Format(time.RFC3339),
 						SharedMemberCount:  int(memberCount),
 						CanMigrateToShared: binding.Mode == ModeDedicated,
-					}, nil
+					}), nil
 				}
 			}
 
 			// 云端 NLB 无法获取或已丢失
-			return &models.Bandwidth500Summary{
+			return decorateSummaryWithOp(&models.Bandwidth500Summary{
 				Status:              StatusRepairRequired,
 				Enabled:             &trueVal,
 				Mode:                binding.Mode,
@@ -331,18 +373,18 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 				Connectivity:        "unverified",
 				Freshness:           "fresh",
 				ObservedAt:          time.Now().UTC().Format(time.RFC3339),
-			}, nil
+			}), nil
 		}
 	}
 
 	// 3. 数据库无活跃记录，进行历史旧配置只读识别 (legacy-verified)
 	summary, err := s.detectLegacyConfig(ctx, user, instanceID)
 	if err == nil && summary != nil {
-		return summary, nil
+		return decorateSummaryWithOp(summary), nil
 	}
 
 	// 4. 确认未启用
-	return &models.Bandwidth500Summary{
+	return decorateSummaryWithOp(&models.Bandwidth500Summary{
 		Status:       StatusDisabled,
 		Enabled:      &falseVal,
 		CanEnable:    true,
@@ -351,7 +393,7 @@ func (s *Bandwidth500Service) GetInstance500MbpsStatus(ctx context.Context, user
 		Connectivity: "unverified",
 		Freshness:    "fresh",
 		ObservedAt:   time.Now().UTC().Format(time.RFC3339),
-	}, nil
+	}), nil
 }
 
 // detectLegacyConfig 只读识别升级前由旧版 oci-panel 开启的 500Mbps 实例
@@ -561,23 +603,26 @@ type PlanRequest struct {
 
 // PlanResponse 计划响应
 type PlanResponse struct {
-	PlanID            string                        `json:"planId"`
-	InstanceID        string                        `json:"instanceId"`
-	Mode              string                        `json:"mode"`
-	CurrentStatus     string                        `json:"currentStatus"`
-	VcnID             string                        `json:"vcnId"`
-	SubnetID          string                        `json:"subnetId"`
-	CanReuseNat       bool                          `json:"canReuseNat"`
-	NatGatewayID      string                        `json:"natGatewayId"`
-	CanReuseNlb       bool                          `json:"canReuseNlb"`
-	NlbID             string                        `json:"nlbId"`
-	NlbAccessIP       string                        `json:"nlbAccessIp"`
-	EffectiveMappings []models.Bandwidth500Endpoint `json:"effectiveMappings"`
-	PortConflicts     []string                      `json:"portConflicts,omitempty"`
-	RequiresMigration bool                          `json:"requiresMigration"`
-	Warnings          []string                      `json:"warnings"`
-	Supported         bool                          `json:"supported"`
-	Reason            string                        `json:"reason"`
+	PlanID              string                        `json:"planId"`
+	InstanceID          string                        `json:"instanceId"`
+	Mode                string                        `json:"mode"`
+	CurrentStatus       string                        `json:"currentStatus"`
+	VcnID               string                        `json:"vcnId"`
+	SubnetID            string                        `json:"subnetId"`
+	CanReuseNat         bool                          `json:"canReuseNat"`
+	NatGatewayID        string                        `json:"natGatewayId"`
+	CanReuseNlb         bool                          `json:"canReuseNlb"`
+	NlbID               string                        `json:"nlbId"`
+	NlbAccessIP         string                        `json:"nlbAccessIp"`
+	EffectiveMappings   []models.Bandwidth500Endpoint `json:"effectiveMappings"`
+	PortConflicts       []string                      `json:"portConflicts,omitempty"`
+	RequiresMigration   bool                          `json:"requiresMigration"`
+	MigrationInstanceID string                        `json:"migrationInstanceId,omitempty"`
+	ExistingNlbCount    int                           `json:"existingNlbCount"`
+	QuotaRisk           bool                          `json:"quotaRisk"`
+	Warnings            []string                      `json:"warnings"`
+	Supported           bool                          `json:"supported"`
+	Reason              string                        `json:"reason"`
 }
 
 // Plan500Mbps 执行只读预检并生成执行计划（不创建资源、不修改云端）
@@ -653,31 +698,47 @@ func (s *Bandwidth500Service) Plan500Mbps(ctx context.Context, user *models.OciU
 	})
 
 	if err == nil && nlbListResp.NetworkLoadBalancerCollection.Items != nil {
+		activeItems := nlbListResp.NetworkLoadBalancerCollection.Items
+		resp.ExistingNlbCount = len(activeItems)
+
+		var otherManagedDedicatedNlb *networkloadbalancer.NetworkLoadBalancerSummary
+		var otherInstanceID string
+
 		// 寻找同 VCN 的受管共享 NLB
-		for _, nlb := range nlbListResp.NetworkLoadBalancerCollection.Items {
+		for _, nlb := range activeItems {
 			tags := nlb.FreeformTags
-			if tags != nil && tags[tagManagedKey] == tagManagedVal && tags[tagFeatureKey] == tagFeatureVal && tags[tagModeKey] == ModeSharedPorts {
-				resp.CanReuseNlb = true
-				resp.NlbID = *nlb.Id
-				for _, ip := range nlb.IpAddresses {
-					if ip.IpAddress != nil && !isPrivateIP(*ip.IpAddress) {
-						resp.NlbAccessIP = *ip.IpAddress
-						break
+			if tags != nil && tags[tagManagedKey] == tagManagedVal && tags[tagFeatureKey] == tagFeatureVal {
+				if tags[tagModeKey] == ModeSharedPorts {
+					resp.CanReuseNlb = true
+					resp.NlbID = *nlb.Id
+					for _, ip := range nlb.IpAddresses {
+						if ip.IpAddress != nil && !isPrivateIP(*ip.IpAddress) {
+							resp.NlbAccessIP = *ip.IpAddress
+							break
+						}
 					}
+					break
+				} else if tags[tagInstanceKey] != "" && tags[tagInstanceKey] != req.InstanceID {
+					nlbCopy := nlb
+					otherManagedDedicatedNlb = &nlbCopy
+					otherInstanceID = tags[tagInstanceKey]
 				}
-				break
 			}
 		}
 
-		// 检查是否有第一台实例创建的旧受管 NLB 可原地迁移
-		if !resp.CanReuseNlb && req.Mode == ModeSharedPorts {
-			for _, nlb := range nlbListResp.NetworkLoadBalancerCollection.Items {
-				tags := nlb.FreeformTags
-				if tags != nil && tags[tagManagedKey] == tagManagedVal && tags[tagInstanceKey] != "" && tags[tagInstanceKey] != req.InstanceID {
-					resp.RequiresMigration = true
-					resp.Warnings = append(resp.Warnings, fmt.Sprintf("发现同 compartment 内存在其他实例占用的独享 NLB (%s)。推荐先将其迁移为共享池以复用额度与 IP。", *nlb.Id))
-					break
-				}
+		if req.Mode == ModeDedicated {
+			if resp.ExistingNlbCount >= 1 {
+				resp.QuotaRisk = true
+				resp.Warnings = append(resp.Warnings, "检测到当前区域/区间已存在运行中的 NLB。OCI 免费账户通常限制每个区域最多 1 个 NLB (max-nlb-flexible-count)，再次创建独享 NLB 将导致配额超限失败。强烈建议使用「共享端口」模式以复用现有 NLB。")
+			}
+		} else { // ModeSharedPorts
+			if !resp.CanReuseNlb && otherManagedDedicatedNlb != nil {
+				resp.RequiresMigration = true
+				resp.MigrationInstanceID = otherInstanceID
+				resp.Warnings = append(resp.Warnings, fmt.Sprintf("发现同 VCN 下已有实例占用的独享 NLB (%s)。系统支持将其升级为共享池，使两台实例共享同一 NLB 公网 IP，规避配额限制。", *otherManagedDedicatedNlb.Id))
+			} else if !resp.CanReuseNlb && resp.ExistingNlbCount >= 1 {
+				resp.QuotaRisk = true
+				resp.Warnings = append(resp.Warnings, "检测到当前区域已有运行中的 NLB，但未发现受管共享池。若需开启新 NLB 可能触碰免费配额限制。")
 			}
 		}
 	}
@@ -808,17 +869,45 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 		PrivateIP:        privateIP,
 		OriginalSnapshot: string(snapshotBytes),
 		Status:           StatusEnabling,
+		LastError:        "",
 	}
 	_ = database.GetDB().Save(&binding).Error
+
+	op := models.Bandwidth500Operation{
+		ID:         uuid.New().String(),
+		InstanceID: req.InstanceID,
+		Action:     "enable",
+		Status:     "running",
+		Progress:   10,
+		Message:    "正在准备 500Mbps 网络配置...",
+	}
+	_ = database.GetDB().Create(&op).Error
+
+	recordFailure := func(err error, stage string) error {
+		classifiedErr := ClassifyOCIError(err)
+		errMsg := fmt.Sprintf("%s: %v", stage, classifiedErr)
+		binding.Status = StatusRepairRequired
+		binding.LastError = classifiedErr.Error()
+		_ = database.GetDB().Save(&binding).Error
+
+		op.Status = "failed"
+		op.Progress = 100
+		op.Error = classifiedErr.Error()
+		op.Message = errMsg
+		_ = database.GetDB().Save(&op).Error
+
+		return fmt.Errorf("%s: %w", stage, classifiedErr)
+	}
 
 	// 5. 发现或创建 NAT 网关
 	natGatewayID, isBorrowedNat, err := s.ensureNatGateway(ctx, vnClient, compartmentID, vcnID)
 	if err != nil {
-		binding.Status = StatusRepairRequired
-		_ = database.GetDB().Save(&binding).Error
-		return "", fmt.Errorf("failed to ensure NAT gateway: %w", ClassifyOCIError(err))
+		return "", recordFailure(err, "failed to ensure NAT gateway")
 	}
 	binding.NatGatewayID = natGatewayID
+	op.Progress = 30
+	op.Message = "NAT 网关已就绪，正在准备网络负载均衡器 (NLB)..."
+	_ = database.GetDB().Save(&op).Error
 
 	// 登记 NAT 资源
 	natOrigin := OriginCreated
@@ -832,9 +921,7 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 	// 6. 发现或创建 NLB
 	nlbClient, err := s.ociService.GetNetworkLoadBalancerClient(user)
 	if err != nil {
-		binding.Status = StatusRepairRequired
-		_ = database.GetDB().Save(&binding).Error
-		return "", fmt.Errorf("failed to get NLB client: %w", err)
+		return "", recordFailure(err, "failed to get NLB client")
 	}
 
 	var nlbID string
@@ -842,12 +929,10 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 	var endpoints []models.Bandwidth500Endpoint
 
 	if req.Mode == ModeSharedPorts {
-		// 共享模式：确保共享 NLB
-		nlbID, publicIP, err = s.ensureSharedNlb(ctx, nlbClient, compartmentID, *vnic.SubnetId, vcnID)
+		// 共享模式：确保共享 NLB (优先复用既有共享池，或原地升级既有独享 NLB 规避配额超限)
+		nlbID, publicIP, err = s.ensureSharedNlb(ctx, user, nlbClient, compartmentID, *vnic.SubnetId, vcnID)
 		if err != nil {
-			binding.Status = StatusRepairRequired
-			_ = database.GetDB().Save(&binding).Error
-			return "", fmt.Errorf("failed to ensure shared NLB: %w", ClassifyOCIError(err))
+			return "", recordFailure(err, "failed to ensure shared NLB")
 		}
 
 		if len(req.Mappings) == 0 {
@@ -865,17 +950,13 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 		// 为该实例创建监听器与后端集合
 		err = s.ensureInstanceEndpoints(ctx, nlbClient, nlbID, req.InstanceID, privateIP, endpoints)
 		if err != nil {
-			binding.Status = StatusRepairRequired
-			_ = database.GetDB().Save(&binding).Error
-			return "", fmt.Errorf("failed to ensure instance endpoints: %w", ClassifyOCIError(err))
+			return "", recordFailure(err, "failed to ensure instance endpoints")
 		}
 	} else {
 		// 独享全端口模式
 		nlbID, publicIP, err = s.ensureDedicatedNlb(ctx, nlbClient, compartmentID, *vnic.SubnetId, req.InstanceID, privateIP, req.SSHPort)
 		if err != nil {
-			binding.Status = StatusRepairRequired
-			_ = database.GetDB().Save(&binding).Error
-			return "", fmt.Errorf("failed to ensure dedicated NLB: %w", ClassifyOCIError(err))
+			return "", recordFailure(err, "failed to ensure dedicated NLB")
 		}
 		endpoints = []models.Bandwidth500Endpoint{
 			{
@@ -891,13 +972,14 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 	binding.ObservedIP = publicIP
 	epBytes, _ := json.Marshal(endpoints)
 	binding.TargetEndpoints = string(epBytes)
+	op.Progress = 70
+	op.Message = "NLB 已就绪，正在配置受管路由表与网卡..."
+	_ = database.GetDB().Save(&op).Error
 
 	// 7. 创建或复用包含 NAT 默认路由的受管路由表
 	routeTableID, err := s.ensureNatRouteTable(ctx, vnClient, compartmentID, vcnID, natGatewayID)
 	if err != nil {
-		binding.Status = StatusRepairRequired
-		_ = database.GetDB().Save(&binding).Error
-		return "", fmt.Errorf("failed to ensure NAT route table: %w", ClassifyOCIError(err))
+		return "", recordFailure(err, "failed to ensure NAT route table")
 	}
 	binding.RouteTableID = routeTableID
 	s.registerResource("route_table", routeTableID, user.OciTenantID, user.OciRegion, compartmentID, vcnID, "", OriginCreated, true)
@@ -912,15 +994,19 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 		},
 	})
 	if err != nil {
-		binding.Status = StatusRepairRequired
-		_ = database.GetDB().Save(&binding).Error
-		return "", fmt.Errorf("failed to update VNIC route table: %w", ClassifyOCIError(err))
+		return "", recordFailure(err, "failed to update VNIC route table")
 	}
 
 	// 9. 更新持久化状态为 enabled
 	binding.Status = StatusEnabled
+	binding.LastError = ""
 	binding.ObservedHealth = "healthy"
 	_ = database.GetDB().Save(&binding).Error
+
+	op.Status = "succeeded"
+	op.Progress = 100
+	op.Message = fmt.Sprintf("500Mbps 开启成功，NLB 访问 IP: %s", publicIP)
+	_ = database.GetDB().Save(&op).Error
 
 	return publicIP, nil
 }
@@ -1053,8 +1139,8 @@ func (s *Bandwidth500Service) ensureDedicatedNlb(ctx context.Context, nlbClient 
 	return nlbID, pubIP, nil
 }
 
-// ensureSharedNlb 确保同 VCN 存在受管共享 NLB
-func (s *Bandwidth500Service) ensureSharedNlb(ctx context.Context, nlbClient networkloadbalancer.NetworkLoadBalancerClient, compartmentID, subnetID, vcnID string) (string, string, error) {
+// ensureSharedNlb 确保同 VCN 存在受管共享 NLB (优先复用既有共享池；若无共享池但有同 VCN 独享 NLB，则原地升级为共享池规避配额超限)
+func (s *Bandwidth500Service) ensureSharedNlb(ctx context.Context, user *models.OciUser, nlbClient networkloadbalancer.NetworkLoadBalancerClient, compartmentID, subnetID, vcnID string) (string, string, error) {
 	poolID := fmt.Sprintf("pool-%s", vcnID[:min(8, len(vcnID))])
 
 	// 查找已有共享 NLB
@@ -1069,6 +1155,31 @@ func (s *Bandwidth500Service) ensureSharedNlb(ctx context.Context, nlbClient net
 				pubIP := getPublicIPFromNlbAddresses(nlb.IpAddresses)
 				if pubIP != "" {
 					return *nlb.Id, pubIP, nil
+				}
+			}
+		}
+
+		// 若未找到共享 NLB，但发现同 compartment 存在独享受管 NLB，尝试自动迁移为共享模式以规避配额限制
+		if user != nil {
+			for _, nlb := range listResp.NetworkLoadBalancerCollection.Items {
+				tags := nlb.FreeformTags
+				if tags != nil && tags[tagManagedKey] == tagManagedVal && tags[tagInstanceKey] != "" {
+					targetInstID := tags[tagInstanceKey]
+					log.Printf("ensureSharedNlb: 发现已有独享 NLB %s (实例 %s)，尝试自动升级为共享池以规避 NLB 配额超限...", *nlb.Id, targetInstID)
+					migErr := s.migrateLegacyNlbToSharedLocked(ctx, user, MigrateLegacyRequest{
+						InstanceID: targetInstID,
+						SSHPort:    22,
+					})
+					if migErr == nil {
+						pubIP := getPublicIPFromNlbAddresses(nlb.IpAddresses)
+						if pubIP != "" {
+							log.Printf("ensureSharedNlb: 成功将独享 NLB %s 升级为共享池，访问 IP: %s", *nlb.Id, pubIP)
+							return *nlb.Id, pubIP, nil
+						}
+					} else {
+						log.Printf("ensureSharedNlb: 自动升级已有独享 NLB 失败: %v，将尝试创建新共享 NLB", migErr)
+					}
+					break
 				}
 			}
 		}
@@ -1430,6 +1541,7 @@ func (s *Bandwidth500Service) Disable500MbpsOrchestrated(ctx context.Context, us
 	// 4. 更新数据库状态为 disabled
 	if hasBinding {
 		binding.Status = StatusDisabled
+		binding.LastError = ""
 		binding.ObservedHealth = "unknown"
 		_ = database.GetDB().Save(&binding).Error
 	}
@@ -1446,6 +1558,29 @@ type MigrateLegacyRequest struct {
 
 // MigrateLegacyNlbToShared 将第一台历史单实例全端口 NLB 原地改造为受管共享池（保留 NLB OCID 与公网 IP）
 func (s *Bandwidth500Service) MigrateLegacyNlbToShared(ctx context.Context, user *models.OciUser, req MigrateLegacyRequest) error {
+	vnic, _, err := s.GetPrimaryVnicAndIP(ctx, user, req.InstanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get primary VNIC: %w", err)
+	}
+
+	vnClient, err := s.ociService.GetVirtualNetworkClient(user)
+	if err != nil {
+		return err
+	}
+	subnetResp, err := vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: vnic.SubnetId})
+	if err != nil {
+		return err
+	}
+	vcnID := *subnetResp.VcnId
+
+	lock := s.getVcnLock(user.OciTenantID, user.OciRegion, vcnID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return s.migrateLegacyNlbToSharedLocked(ctx, user, req)
+}
+
+func (s *Bandwidth500Service) migrateLegacyNlbToSharedLocked(ctx context.Context, user *models.OciUser, req MigrateLegacyRequest) error {
 	if req.SSHPort <= 0 {
 		req.SSHPort = 22
 	}
@@ -1470,10 +1605,6 @@ func (s *Bandwidth500Service) MigrateLegacyNlbToShared(ctx context.Context, user
 	}
 	vcnID := *subnetResp.VcnId
 	compartmentID := *instance.CompartmentId
-
-	lock := s.getVcnLock(user.OciTenantID, user.OciRegion, vcnID)
-	lock.Lock()
-	defer lock.Unlock()
 
 	nlbClient, err := s.ociService.GetNetworkLoadBalancerClient(user)
 	if err != nil {
@@ -1574,11 +1705,37 @@ func (s *Bandwidth500Service) MigrateLegacyNlbToShared(ctx context.Context, user
 	binding.ObservedIP = pubIP
 	binding.TargetEndpoints = string(epBytes)
 	binding.Status = StatusEnabled
+	binding.LastError = ""
 	binding.ObservedHealth = "healthy"
 	_ = database.GetDB().Save(&binding).Error
 
 	// 登记该 NLB 为共享资源
 	s.registerResource("network_load_balancer", nlbID, user.OciTenantID, user.OciRegion, compartmentID, vcnID, poolID, OriginAdopted, true)
+
+	return nil
+}
+
+// Reset500MbpsStatus 清除实例的 500Mbps 异常状态或失败记录
+func (s *Bandwidth500Service) Reset500MbpsStatus(ctx context.Context, user *models.OciUser, instanceID string) error {
+	var binding models.Bandwidth500Binding
+	if err := database.GetDB().Where("instance_id = ?", instanceID).First(&binding).Error; err != nil {
+		return nil // 无记录，无需重置
+	}
+
+	// 如果正在开启或迁移中，不允许直接重置
+	if binding.Status == StatusEnabling || binding.Status == StatusDisabling || binding.Status == StatusMigrating {
+		return fmt.Errorf("当前操作正在进行中 (%s)，请稍后再试", binding.Status)
+	}
+
+	// 如果处于已正常启用状态，提示通过关闭流程处理
+	if binding.Status == StatusEnabled {
+		return fmt.Errorf("当前 500Mbps 已正常启用，若要停止请使用「关闭 500Mbps」功能")
+	}
+
+	// 删除异常或失败的绑定记录，恢复干净状态
+	if err := database.GetDB().Delete(&binding).Error; err != nil {
+		return fmt.Errorf("failed to reset binding: %w", err)
+	}
 
 	return nil
 }

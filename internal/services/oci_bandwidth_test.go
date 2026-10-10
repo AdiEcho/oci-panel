@@ -1,12 +1,15 @@
 package services
 
 import (
+	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/adiecho/oci-panel/internal/database"
 	"github.com/adiecho/oci-panel/internal/models"
 )
 
@@ -171,5 +174,60 @@ func TestPortConflictDetection(t *testing.T) {
 	}
 	if conflictFound2 {
 		t.Fatal("different protocol with same port should be allowed")
+	}
+}
+
+func TestReset500MbpsStatus(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_reset.db")
+	if err := database.InitDB(dbPath); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	bwService := &Bandwidth500Service{}
+	user := &models.OciUser{ID: "user-1"}
+
+	// 1. 无记录重置应直接成功（幂等）
+	if err := bwService.Reset500MbpsStatus(context.Background(), user, "inst-none"); err != nil {
+		t.Errorf("expected nil for non-existing binding, got %v", err)
+	}
+
+	// 2. enabling 状态不允许直接重置
+	bindingEnabling := models.Bandwidth500Binding{
+		ID:         "b-1",
+		InstanceID: "inst-enabling",
+		Status:     StatusEnabling,
+	}
+	database.GetDB().Create(&bindingEnabling)
+	if err := bwService.Reset500MbpsStatus(context.Background(), user, "inst-enabling"); err == nil {
+		t.Error("expected error resetting enabling binding, got nil")
+	}
+
+	// 3. enabled 状态不允许通过 reset 重置（需走 disable 流程）
+	bindingEnabled := models.Bandwidth500Binding{
+		ID:         "b-2",
+		InstanceID: "inst-enabled",
+		Status:     StatusEnabled,
+	}
+	database.GetDB().Create(&bindingEnabled)
+	if err := bwService.Reset500MbpsStatus(context.Background(), user, "inst-enabled"); err == nil {
+		t.Error("expected error resetting enabled binding, got nil")
+	}
+
+	// 4. repair-required 或 failed 状态允许重置清理
+	bindingFailed := models.Bandwidth500Binding{
+		ID:         "b-3",
+		InstanceID: "inst-failed",
+		Status:     StatusRepairRequired,
+		LastError:  "NLB_QUOTA_EXCEEDED: 网络负载均衡器(NLB)配额超限",
+	}
+	database.GetDB().Create(&bindingFailed)
+	if err := bwService.Reset500MbpsStatus(context.Background(), user, "inst-failed"); err != nil {
+		t.Errorf("expected success resetting failed binding, got %v", err)
+	}
+
+	// 验证记录已删除
+	var check models.Bandwidth500Binding
+	if err := database.GetDB().Where("instance_id = ?", "inst-failed").First(&check).Error; err == nil {
+		t.Error("expected binding to be deleted after reset")
 	}
 }

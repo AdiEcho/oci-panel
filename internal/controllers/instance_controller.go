@@ -485,6 +485,29 @@ func (ic *InstanceController) Migrate500Mbps(c *gin.Context) {
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "旧 NLB 原地升级为共享池任务已启动，请稍候..."))
 }
 
+// Reset500MbpsRequest 重置 500Mbps 状态请求
+type Reset500MbpsRequest struct {
+	UserId     string `json:"userId" binding:"required"`
+	InstanceId string `json:"instanceId" binding:"required"`
+}
+
+// Reset500Mbps 清除实例的 500Mbps 失败或待修复状态
+func (ic *InstanceController) Reset500Mbps(c *gin.Context) {
+	var req Reset500MbpsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	err := ic.instanceService.Reset500MbpsStatus(req.UserId, req.InstanceId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, "500Mbps 异常状态已清除"))
+}
+
 // Check500MbpsSupport 检查实例是否支持500Mbps功能
 // 仅 VM.Standard.E2.1.Micro (AMD) 实例支持此功能
 type Check500MbpsSupportRequest struct {

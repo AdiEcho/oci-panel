@@ -1,5 +1,5 @@
 import { post } from './http'
-import type { Bandwidth500Endpoint, Bandwidth500Summary } from './oci'
+import type { Bandwidth500Endpoint, Bandwidth500PlanResponse, Bandwidth500Summary } from './oci'
 
 export const instanceApi = {
   start: (userId: string, instanceId: string) => post('/instance/start', { userId, instanceId }),
@@ -35,9 +35,11 @@ export const instanceApi = {
     sshPort?: number
     mappings?: Bandwidth500Endpoint[]
     nlbId?: string
-  }) => post<any>('/instance/bandwidth500/plan', req),
+  }) => post<Bandwidth500PlanResponse>('/instance/bandwidth500/plan', req),
   migrate500Mbps: (req: { userId: string; instanceId: string; sshPort?: number; mappings?: Bandwidth500Endpoint[] }) =>
     post('/instance/bandwidth500/migrate', req),
+  reset500Mbps: (req: { userId: string; instanceId: string }) =>
+    post('/instance/bandwidth500/reset', req),
   createCloudShell: (req: { userId: string; instanceId: string; publicKey: string }) =>
     post<{ connectionId?: string; connectionString?: string }>('/instance/createCloudShell', req)
 }
