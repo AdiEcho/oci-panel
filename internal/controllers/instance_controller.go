@@ -298,16 +298,18 @@ func (ic *InstanceController) AutoRescue(c *gin.Context) {
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "自动救援任务已启动，请等待完成"))
 }
 
-// Enable500MbpsRequest 一键开启500Mbps请求（简化版，仅需要userId和instanceId）
+// Enable500MbpsRequest 一键开启500Mbps请求
 type Enable500MbpsRequest struct {
-	UserId     string `json:"userId" binding:"required"`
-	InstanceId string `json:"instanceId" binding:"required"`
+	UserId     string                        `json:"userId" binding:"required"`
+	InstanceId string                        `json:"instanceId" binding:"required"`
+	Mode       string                        `json:"mode"`     // dedicated, shared-ports
+	SshPort    *int                          `json:"sshPort"`  // 实例健康检查端口，默认 22
+	Mappings   []models.Bandwidth500Endpoint `json:"mappings"` // 共享模式映射列表
+	NlbId      string                        `json:"nlbId"`    // 指定复用 NLB
 }
 
 // Enable500Mbps 一键开启下行500Mbps
-// 警告：此操作仅支持 VM.Standard.E2.1.Micro (AMD) 实例
-// 操作会自动：1. 创建NAT网关 2. 创建网络负载均衡器 3. 配置路由表 4. 放行安全规则
-// 开启后实例原公网IP将失效，请使用新分配的负载均衡器IP访问
+// 支持独享全端口与共享端口两种模式；共享模式复用同一 NLB，极大规避区域 max-nlb-flexible-count 配额限制
 func (ic *InstanceController) Enable500Mbps(c *gin.Context) {
 	var req Enable500MbpsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -315,35 +317,48 @@ func (ic *InstanceController) Enable500Mbps(c *gin.Context) {
 		return
 	}
 
-	// 使用默认SSH端口22
 	sshPort := 22
+	if req.SshPort != nil && *req.SshPort > 0 && *req.SshPort <= 65535 {
+		sshPort = *req.SshPort
+	}
+	mode := req.Mode
+	if mode == "" {
+		mode = services.ModeDedicated
+	}
 
 	// 异步执行
 	util.Go("Enable500Mbps", func() {
-		publicIP, err := ic.instanceService.Enable500Mbps(req.UserId, req.InstanceId, sshPort)
+		publicIP, err := ic.instanceService.Enable500MbpsWithOptions(req.UserId, services.EnableRequest{
+			InstanceID: req.InstanceId,
+			Mode:       mode,
+			SSHPort:    sshPort,
+			Mappings:   req.Mappings,
+			NLBID:      req.NlbId,
+		})
 		if err != nil {
 			log.Printf("Enable500Mbps failed for instance %s: %v", req.InstanceId, err)
-			ic.wsService.SendError(fmt.Sprintf("Enable500Mbps failed for instance %s: %v", req.InstanceId, err))
+			ic.wsService.SendError(fmt.Sprintf("Enable500Mbps 失败 [%s]: %v", req.InstanceId, err))
 		} else {
 			log.Printf("Enable500Mbps succeeded for instance %s, new IP: %s", req.InstanceId, publicIP)
-			ic.wsService.SendSuccess(fmt.Sprintf("Enable500Mbps succeeded for instance %s, new IP: %s", req.InstanceId, publicIP))
+			ic.wsService.SendSuccess(fmt.Sprintf("Enable500Mbps 成功 [%s]，NLB 访问 IP: %s", req.InstanceId, publicIP))
 		}
 	})
 
 	c.JSON(http.StatusOK, models.SuccessResponse(map[string]interface{}{
-		"warning": "开启后实例原公网IP将失效，请使用新分配的负载均衡器IP访问。此操作仅支持 VM.Standard.E2.1.Micro 实例。",
-	}, "500Mbps开启任务已启动，正在创建NAT网关和网络负载均衡器，请稍候..."))
+		"warning": "开启后实例公网流量将通过负载均衡器/NAT网关转发。此操作仅支持 VM.Standard.E2.1.Micro 实例。",
+	}, "500Mbps 开启任务已启动，请稍候在实例列表中查看 NLB 访问入口..."))
 }
 
-// Disable500MbpsRequest 一键关闭500Mbps请求（简化版，仅需要userId和instanceId）
+// Disable500MbpsRequest 一键关闭500Mbps请求
 type Disable500MbpsRequest struct {
-	UserId     string `json:"userId" binding:"required"`
-	InstanceId string `json:"instanceId" binding:"required"`
+	UserId      string `json:"userId" binding:"required"`
+	InstanceId  string `json:"instanceId" binding:"required"`
+	RetainNatGw *bool  `json:"retainNatGw"` // 指针布尔，未传默认 true（保留共享 NAT）
+	RetainNlb   *bool  `json:"retainNlb"`   // 指针布尔，未传默认 true（保留共享 NLB）
 }
 
 // Disable500Mbps 一键关闭下行500Mbps
-// 警告：此操作会删除NAT网关和网络负载均衡器
-// 关闭后需要重新为实例分配公网IP才能访问
+// 安全解绑实例，恢复原始路由与 SkipSourceDestCheck，受保护的共享资源绝不误删
 func (ic *InstanceController) Disable500Mbps(c *gin.Context) {
 	var req Disable500MbpsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -351,24 +366,123 @@ func (ic *InstanceController) Disable500Mbps(c *gin.Context) {
 		return
 	}
 
-	// 默认清理所有资源（NAT网关和网络负载均衡器）
-	retainNatGw := false
-	retainNlb := false
+	// 默认安全保留
+	retainNatGw := true
+	if req.RetainNatGw != nil {
+		retainNatGw = *req.RetainNatGw
+	}
+	retainNlb := true
+	if req.RetainNlb != nil {
+		retainNlb = *req.RetainNlb
+	}
 
 	// 异步执行
 	util.Go("Disable500Mbps", func() {
-		err := ic.instanceService.Disable500Mbps(req.UserId, req.InstanceId, retainNatGw, retainNlb)
+		err := ic.instanceService.Disable500MbpsWithOptions(req.UserId, services.DisableRequest{
+			InstanceID:  req.InstanceId,
+			RetainNatGw: &retainNatGw,
+			RetainNlb:   &retainNlb,
+		})
 		if err != nil {
 			log.Printf("Disable500Mbps failed for instance %s: %v", req.InstanceId, err)
-			ic.wsService.SendError(fmt.Sprintf("Disable500Mbps failed for instance %s: %v", req.InstanceId, err))
+			ic.wsService.SendError(fmt.Sprintf("Disable500Mbps 失败 [%s]: %v", req.InstanceId, err))
 		} else {
-			ic.wsService.SendSuccess(fmt.Sprintf("Disable500Mbps completed for instance %s", req.InstanceId))
+			ic.wsService.SendSuccess(fmt.Sprintf("500Mbps 已成功为实例 %s 关闭，已恢复原始路由", req.InstanceId))
 		}
 	})
 
 	c.JSON(http.StatusOK, models.SuccessResponse(map[string]interface{}{
-		"warning": "关闭后NAT网关和网络负载均衡器将被删除，实例将失去公网访问能力，需要重新分配公网IP。",
-	}, "500Mbps关闭任务已启动，正在清理NAT网关和网络负载均衡器，请稍候..."))
+		"warning": "关闭任务已提交，实例将恢复原始路由。若保留了 NLB/NAT，其他实例的访问不受影响。",
+	}, "500Mbps 关闭任务已启动，正在恢复实例网络配置..."))
+}
+
+// GetStatus500MbpsRequest 获取 500Mbps 状态请求
+type GetStatus500MbpsRequest struct {
+	UserId     string `json:"userId" binding:"required"`
+	InstanceId string `json:"instanceId" binding:"required"`
+}
+
+// GetStatus500Mbps 获取指定实例的 500Mbps 详细状态与访问端点
+func (ic *InstanceController) GetStatus500Mbps(c *gin.Context) {
+	var req GetStatus500MbpsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	status, err := ic.instanceService.GetStatus500Mbps(req.UserId, req.InstanceId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(status, "获取 500Mbps 状态成功"))
+}
+
+// Plan500MbpsRequest 计划请求
+type Plan500MbpsRequest struct {
+	UserId     string                        `json:"userId" binding:"required"`
+	InstanceId string                        `json:"instanceId" binding:"required"`
+	Mode       string                        `json:"mode"`
+	SshPort    int                           `json:"sshPort"`
+	Mappings   []models.Bandwidth500Endpoint `json:"mappings"`
+	NlbId      string                        `json:"nlbId"`
+}
+
+// Plan500Mbps 生成 500Mbps 预检与执行计划
+func (ic *InstanceController) Plan500Mbps(c *gin.Context) {
+	var req Plan500MbpsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	plan, err := ic.instanceService.Plan500Mbps(req.UserId, services.PlanRequest{
+		InstanceID: req.InstanceId,
+		Mode:       req.Mode,
+		SSHPort:    req.SshPort,
+		Mappings:   req.Mappings,
+		NLBID:      req.NlbId,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(plan, "生成预检计划成功"))
+}
+
+// Migrate500MbpsRequest 迁移旧 NLB 为共享池请求
+type Migrate500MbpsRequest struct {
+	UserId     string                        `json:"userId" binding:"required"`
+	InstanceId string                        `json:"instanceId" binding:"required"`
+	SshPort    int                           `json:"sshPort"`
+	Mappings   []models.Bandwidth500Endpoint `json:"mappings"`
+}
+
+// Migrate500Mbps 将历史单实例独享 NLB 原地改造为受管共享池
+func (ic *InstanceController) Migrate500Mbps(c *gin.Context) {
+	var req Migrate500MbpsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	util.Go("Migrate500Mbps", func() {
+		err := ic.instanceService.MigrateLegacyNlbToShared(req.UserId, services.MigrateLegacyRequest{
+			InstanceID: req.InstanceId,
+			SSHPort:    req.SshPort,
+			Mappings:   req.Mappings,
+		})
+		if err != nil {
+			log.Printf("MigrateLegacyNlbToShared failed for instance %s: %v", req.InstanceId, err)
+			ic.wsService.SendError(fmt.Sprintf("原地迁移为共享池失败 [%s]: %v", req.InstanceId, err))
+		} else {
+			ic.wsService.SendSuccess(fmt.Sprintf("实例 %s 对应的 NLB 已成功升级为共享模式，现在第二台实例可加入该共享池", req.InstanceId))
+		}
+	})
+
+	c.JSON(http.StatusOK, models.SuccessResponse(nil, "旧 NLB 原地升级为共享池任务已启动，请稍候..."))
 }
 
 // Check500MbpsSupport 检查实例是否支持500Mbps功能

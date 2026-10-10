@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/adiecho/oci-panel/internal/models"
+	"github.com/adiecho/oci-panel/internal/services"
 	"github.com/adiecho/oci-panel/internal/util"
 	"github.com/gin-gonic/gin"
 )
@@ -60,10 +61,18 @@ func (oc *OciController) GetConfigInstances(c *gin.Context) {
 		return
 	}
 
+	user, ok := oc.loadUser(c, req.ConfigID)
+	if !ok {
+		return
+	}
+
 	// 如果需要刷新缓存，先更新
 	if req.ClearCache {
 		oc.schedulerService.UpdateConfigCache(req.ConfigID)
 	}
+
+	bwService := services.GetBandwidth500Service(oc.ociService)
+	ctx := context.Background()
 
 	// 尝试从数据库缓存获取
 	if oc.schedulerService.IsCacheEnabled() {
@@ -71,19 +80,14 @@ func (oc *OciController) GetConfigInstances(c *gin.Context) {
 		if err == nil && cache.InstancesData != "" {
 			var instances []models.InstanceInfo
 			if json.Unmarshal([]byte(cache.InstancesData), &instances) == nil {
+				// 附加同源状态摘要，确保旧缓存缺少 bandwidth500 字段时补全
+				instances = bwService.DecorateInstances(ctx, &user, instances)
 				c.JSON(http.StatusOK, models.SuccessResponse(instances, "Success (cached)"))
 				return
 			}
 		}
 	}
 
-	// 实时获取
-	user, ok := oc.loadUser(c, req.ConfigID)
-	if !ok {
-		return
-	}
-
-	ctx := context.Background()
 	compartmentId := user.OciTenantID
 
 	instances := []models.InstanceInfo{}
@@ -91,6 +95,8 @@ func (oc *OciController) GetConfigInstances(c *gin.Context) {
 	if err == nil {
 		// 并发获取各实例详情（带并发上限），替代此前逐实例串行的 N×(6~8) 往返。
 		instances = oc.ociService.GetInstancesDetailsConcurrent(ctx, &user, instanceList)
+		// 实时分支统一附加 500Mbps 状态摘要
+		instances = bwService.DecorateInstances(ctx, &user, instances)
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(instances, "Success"))

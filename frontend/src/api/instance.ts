@@ -1,4 +1,5 @@
 import { post } from './http'
+import type { Bandwidth500Endpoint, Bandwidth500Summary } from './oci'
 
 export const instanceApi = {
   start: (userId: string, instanceId: string) => post('/instance/start', { userId, instanceId }),
@@ -15,10 +16,28 @@ export const instanceApi = {
   attachIPv6: (req: { userId: string; instanceId?: string }) => post<{ ipv6?: string }>('/instance/attachIPv6', req),
   autoRescue: (req: { userId: string; instanceId?: string; instanceName: string; keepBackup: boolean }) =>
     post('/instance/autoRescue', req),
-  enable500Mbps: (req: { userId: string; instanceId?: string; sshPort: number }) =>
-    post('/instance/enable500Mbps', req),
-  disable500Mbps: (req: { userId: string; instanceId?: string; retainNatGw: boolean; retainNlb: boolean }) =>
+  enable500Mbps: (req: {
+    userId: string
+    instanceId?: string
+    sshPort?: number
+    mode?: string
+    mappings?: Bandwidth500Endpoint[]
+    nlbId?: string
+  }) => post('/instance/enable500Mbps', req),
+  disable500Mbps: (req: { userId: string; instanceId?: string; retainNatGw?: boolean; retainNlb?: boolean }) =>
     post('/instance/disable500Mbps', req),
+  getStatus500Mbps: (userId: string, instanceId: string) =>
+    post<Bandwidth500Summary>('/instance/bandwidth500/status', { userId, instanceId }),
+  plan500Mbps: (req: {
+    userId: string
+    instanceId: string
+    mode?: string
+    sshPort?: number
+    mappings?: Bandwidth500Endpoint[]
+    nlbId?: string
+  }) => post<any>('/instance/bandwidth500/plan', req),
+  migrate500Mbps: (req: { userId: string; instanceId: string; sshPort?: number; mappings?: Bandwidth500Endpoint[] }) =>
+    post('/instance/bandwidth500/migrate', req),
   createCloudShell: (req: { userId: string; instanceId: string; publicKey: string }) =>
     post<{ connectionId?: string; connectionString?: string }>('/instance/createCloudShell', req)
 }

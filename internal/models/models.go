@@ -49,22 +49,23 @@ type OciConfigDetails struct {
 
 // InstanceInfo 实例信息
 type InstanceInfo struct {
-	ID                 string     `json:"id"`
-	DisplayName        string     `json:"displayName"`
-	State              string     `json:"state"`
-	Shape              string     `json:"shape"`
-	Ocpus              float32    `json:"ocpus"`
-	Memory             float32    `json:"memory"`
-	PublicIPs          []string   `json:"publicIps"`
-	PrivateIPs         []string   `json:"privateIps"`
-	IPv6               string     `json:"ipv6"`
-	Region             string     `json:"region"`
-	AvailabilityDomain string     `json:"availabilityDomain"`
-	BootVolumeSize     int64      `json:"bootVolumeSize"`
-	BootVolumeVpu      int64      `json:"bootVolumeVpu"`
-	ImageName          string     `json:"imageName"`
-	CreateTime         string     `json:"createTime"`
-	VnicList           []VnicInfo `json:"vnicList"`
+	ID                 string               `json:"id"`
+	DisplayName        string               `json:"displayName"`
+	State              string               `json:"state"`
+	Shape              string               `json:"shape"`
+	Ocpus              float32              `json:"ocpus"`
+	Memory             float32              `json:"memory"`
+	PublicIPs          []string             `json:"publicIps"`
+	PrivateIPs         []string             `json:"privateIps"`
+	IPv6               string               `json:"ipv6"`
+	Region             string               `json:"region"`
+	AvailabilityDomain string               `json:"availabilityDomain"`
+	BootVolumeSize     int64                `json:"bootVolumeSize"`
+	BootVolumeVpu      int64                `json:"bootVolumeVpu"`
+	ImageName          string               `json:"imageName"`
+	CreateTime         string               `json:"createTime"`
+	VnicList           []VnicInfo           `json:"vnicList"`
+	Bandwidth500       *Bandwidth500Summary `json:"bandwidth500,omitempty"`
 }
 
 // VnicInfo VNIC信息
@@ -422,5 +423,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&OciImageCache{},
 		&SSHKey{},
 		&InstancePreset{},
+		&Bandwidth500Resource{},
+		&Bandwidth500Binding{},
+		&Bandwidth500Operation{},
 	)
 }

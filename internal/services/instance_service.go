@@ -250,6 +250,17 @@ func (s *InstanceService) Enable500Mbps(userId string, instanceId string, sshPor
 	return s.ociService.Enable500Mbps(&user, instanceId, sshPort)
 }
 
+// Enable500MbpsWithOptions 携带完整选项开启 500Mbps（支持共享模式与端口映射）
+func (s *InstanceService) Enable500MbpsWithOptions(userId string, req EnableRequest) (string, error) {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return "", fmt.Errorf("user not found: %w", err)
+	}
+
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.Enable500MbpsOrchestrated(context.Background(), &user, req)
+}
+
 // Disable500Mbps 关闭下行500Mbps
 func (s *InstanceService) Disable500Mbps(userId string, instanceId string, retainNatGw, retainNlb bool) error {
 	var user models.OciUser
@@ -258,6 +269,56 @@ func (s *InstanceService) Disable500Mbps(userId string, instanceId string, retai
 	}
 
 	return s.ociService.Disable500Mbps(&user, instanceId, retainNatGw, retainNlb)
+}
+
+// Disable500MbpsWithOptions 携带完整选项关闭 500Mbps
+func (s *InstanceService) Disable500MbpsWithOptions(userId string, req DisableRequest) error {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.Disable500MbpsOrchestrated(context.Background(), &user, req)
+}
+
+// GetStatus500Mbps 获取指定实例的 500Mbps 状态及端点详情
+func (s *InstanceService) GetStatus500Mbps(userId string, instanceId string) (*models.Bandwidth500Summary, error) {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.GetInstance500MbpsStatus(context.Background(), &user, instanceId)
+}
+
+// Plan500Mbps 获取 500Mbps 开启预检与执行计划
+func (s *InstanceService) Plan500Mbps(userId string, req PlanRequest) (*PlanResponse, error) {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.Plan500Mbps(context.Background(), &user, req)
+}
+
+// MigrateLegacyNlbToShared 将第一台历史单实例独享 NLB 原地转换为受管共享池
+func (s *InstanceService) MigrateLegacyNlbToShared(userId string, req MigrateLegacyRequest) error {
+	var user models.OciUser
+	if err := database.GetDB().Where("id = ?", userId).First(&user).Error; err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.MigrateLegacyNlbToShared(context.Background(), &user, req)
+}
+
+// DecorateInstancesWith500Mbps 为实例列表补充 500Mbps 状态摘要
+func (s *InstanceService) DecorateInstancesWith500Mbps(user *models.OciUser, instances []models.InstanceInfo) []models.InstanceInfo {
+	bwService := GetBandwidth500Service(s.ociService)
+	return bwService.DecorateInstances(context.Background(), user, instances)
 }
 
 // Check500MbpsSupport 检查实例是否支持500Mbps功能

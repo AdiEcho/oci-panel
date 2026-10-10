@@ -56,3 +56,4 @@ config.toml
 /keys/.gitkeep
 /frontend/.postcssrc.json
 .omc/
+docs/

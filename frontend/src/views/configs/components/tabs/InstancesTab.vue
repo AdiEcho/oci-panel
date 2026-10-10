@@ -1,26 +1,72 @@
 <script setup lang="ts">
-import { Loader2, Server, Play, Square, RotateCcw, Globe, Settings, Terminal, Trash2 } from '@lucide/vue'
+import { Loader2, Server, Play, Square, RotateCcw, Globe, Settings, Terminal, Trash2, Copy, Zap } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { copyToClipboard } from '@/lib/utils'
+import { toast } from '@/composables/useToast'
 import type { Instance } from '@/views/configs/types'
 
-// 配置详情「实例列表」标签页（C7 从 Configs.vue 抽出，纯展示）。
-// 所有实例操作经 emit 上抛由抽屉处理（控制/删除/换 IP/编辑/CloudShell），
-// 与拆分前的语义、确认弹窗、loading 标识完全一致。
+// 配置详情「实例列表」标签页。
+// 支持 500Mbps NLB 实际公网访问 IP 优先展示、端口映射标注、以及安全复制 SSH 命令。
 defineProps<{
   instances: Instance[]
   loading: boolean
   actionLoading: Record<string, boolean>
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   control: [instanceId: string, action: string]
   terminate: [instanceId: string]
   'change-ip': [instanceId: string]
   edit: [instance: Instance]
   'cloud-shell': [instanceId: string]
 }>()
+
+const copyText = async (text: string, label: string) => {
+  try {
+    await copyToClipboard(text)
+    toast.success(`${label}已复制`)
+  } catch {
+    toast.error('复制失败，请手动复制')
+  }
+}
+
+const copySsh = async (instance: Instance) => {
+  const bw = instance.bandwidth500
+  if (bw?.enabled && bw.accessIp) {
+    let port = 22
+    if (bw.endpoints && bw.endpoints.length > 0) {
+      const sshEp = bw.endpoints.find(e => e.id === 'ssh' || e.backendPort === 22) || bw.endpoints[0]
+      if (sshEp && sshEp.listenPort > 0) {
+        port = sshEp.listenPort
+      }
+    }
+    const cmd = port === 22 ? `ssh root@${bw.accessIp}` : `ssh -p ${port} root@${bw.accessIp}`
+    await copyText(cmd, 'SSH 命令')
+    return
+  }
+
+  const primaryIp = instance.publicIps?.[0]
+  if (primaryIp) {
+    await copyText(`ssh root@${primaryIp}`, 'SSH 命令')
+  } else {
+    toast.warning('实例暂无可用公网 IP')
+  }
+}
+
+const handleChangeIpClick = (instance: Instance) => {
+  if (instance.bandwidth500?.enabled) {
+    if (
+      !confirm(
+        '提示：当前实例已启用 500Mbps，主访问入口为负载均衡器(NLB)公网地址。更改此处的网卡IP不会改变 NLB 的访问入口，确定继续更改实例网卡IP吗？'
+      )
+    ) {
+      return
+    }
+  }
+  emit('change-ip', instance.id)
+}
 </script>
 
 <template>
@@ -64,8 +110,96 @@ defineEmits<{
           <span class="text-muted-foreground text-xs block mb-1">区域</span>
           <span class="font-medium">{{ instance.region }}</span>
         </div>
-        <div class="bg-muted/30 rounded-lg p-3 col-span-2">
-          <span class="text-muted-foreground text-xs block mb-1">公网IP</span>
+        <!-- 500Mbps 启用状态卡片（优先展示 NLB 实际访问 IP） -->
+        <div
+          v-if="instance.bandwidth500?.enabled && instance.bandwidth500?.accessIp"
+          class="bg-primary/5 border border-primary/30 rounded-lg p-3 col-span-2 space-y-2"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-primary text-xs font-semibold flex items-center gap-1.5">
+              <Zap class="w-3.5 h-3.5 fill-primary" />
+              访问 IP (500Mbps / NLB)
+            </span>
+            <Badge variant="success" class="text-[11px] py-0 px-2 h-5">
+              {{ instance.bandwidth500.mode === 'shared-ports' ? '共享 NLB' : '独享 NLB' }}
+            </Badge>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-mono text-base font-bold text-primary tracking-wide">
+              {{ instance.bandwidth500.accessIp }}
+            </span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                class="h-7 text-xs px-2"
+                @click="copyText(instance.bandwidth500.accessIp, 'NLB IP')"
+              >
+                <Copy class="w-3 h-3 mr-1" />
+                复制IP
+              </Button>
+              <Button size="sm" variant="outline" class="h-7 text-xs px-2" @click="copySsh(instance)">
+                <Terminal class="w-3 h-3 mr-1" />
+                复制SSH
+              </Button>
+            </div>
+          </div>
+          <!-- 共享模式端口映射标注 -->
+          <div
+            v-if="instance.bandwidth500.mode === 'shared-ports' && instance.bandwidth500.endpoints?.length"
+            class="flex flex-wrap gap-1.5 pt-1 text-xs"
+          >
+            <span class="text-muted-foreground">端口映射:</span>
+            <span
+              v-for="ep in instance.bandwidth500.endpoints"
+              :key="ep.id"
+              class="font-mono bg-background/80 px-1.5 py-0.5 rounded border border-border text-foreground"
+            >
+              {{ ep.protocol }} {{ ep.listenPort }} &rarr; {{ ep.backendPort }}
+            </span>
+          </div>
+          <div v-else class="text-xs text-muted-foreground pt-0.5">TCP/UDP 全端口透明转发 (独享模式)</div>
+          <!-- 标注实例原网卡公网 IP -->
+          <div
+            class="text-[11px] text-muted-foreground/80 border-t border-border/50 pt-1.5 flex items-center justify-between"
+          >
+            <span>实例原公网 IP (非当前推荐入口): {{ instance.publicIps?.join(', ') || '无' }}</span>
+          </div>
+        </div>
+
+        <!-- 500Mbps 启用但地址获取中/待核验 -->
+        <div
+          v-else-if="instance.bandwidth500?.enabled"
+          class="bg-warning/10 border border-warning/30 rounded-lg p-3 col-span-2 space-y-1.5"
+        >
+          <div class="flex items-center justify-between text-warning text-xs font-semibold">
+            <span class="flex items-center gap-1.5">
+              <Loader2 class="w-3.5 h-3.5 animate-spin" />
+              500Mbps 访问地址获取中 / 待核验
+            </span>
+            <Badge variant="warning" class="text-[11px] py-0 px-2 h-5">已启用</Badge>
+          </div>
+          <p class="text-xs text-muted-foreground">当前配置已生效，正在核验外部 NLB 访问地址，请稍候刷新。</p>
+          <div class="text-[11px] text-muted-foreground">
+            实例原公网 IP: {{ instance.publicIps?.join(', ') || '无' }}
+          </div>
+        </div>
+
+        <!-- 未启用 500Mbps（正常展示实例公网 IP） -->
+        <div v-else class="bg-muted/30 rounded-lg p-3 col-span-2">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-muted-foreground text-xs block">实例公网IP</span>
+            <Button
+              v-if="instance.publicIps?.[0]"
+              size="sm"
+              variant="ghost"
+              class="h-6 text-xs px-1.5 text-muted-foreground hover:text-foreground"
+              @click="copySsh(instance)"
+            >
+              <Terminal class="w-3 h-3 mr-1" />
+              复制SSH
+            </Button>
+          </div>
           <span class="font-mono text-sm font-medium">{{ instance.publicIps?.join(', ') || '无' }}</span>
         </div>
         <div v-if="instance.ipv6" class="bg-primary/5 border border-primary/20 rounded-lg p-3 col-span-2">
@@ -105,7 +239,7 @@ defineEmits<{
           size="sm"
           variant="outline"
           :disabled="actionLoading[instance.id]"
-          @click="$emit('change-ip', instance.id)"
+          @click="handleChangeIpClick(instance)"
         >
           <Globe class="w-3.5 h-3.5" />
           更改IP

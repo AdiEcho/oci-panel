@@ -25,6 +25,35 @@ export interface ConfigDetails {
   [key: string]: unknown
 }
 
+export interface Bandwidth500Endpoint {
+  id: string
+  protocol: string
+  listenPort: number
+  backendPort: number
+}
+
+export interface Bandwidth500Summary {
+  status: string // enabled, disabled, enabling, disabling, repair-required, unknown
+  enabled: boolean | null
+  mode?: string // dedicated, shared-ports
+  source?: string // binding, legacy-verified, unknown
+  nlbId?: string
+  accessIp?: string
+  natEgressIp?: string
+  endpoints?: Bandwidth500Endpoint[]
+  health?: string
+  connectivity?: string
+  canEnable: boolean
+  canDisable: boolean
+  actionBlockedReason?: string
+  operationId?: string
+  statusVersion?: string
+  observedAt?: string
+  freshness?: string
+  sharedMemberCount?: number
+  canMigrateToShared?: boolean
+}
+
 /** 实例信息（详情页实例列表项）。 */
 export interface InstanceInfo {
   id: string
@@ -39,6 +68,7 @@ export interface InstanceInfo {
   publicIps?: string[]
   ipv6?: string
   imageName?: string
+  bandwidth500?: Bandwidth500Summary
 }
 
 /** 引导卷信息（字段较多且前端松散使用，保持宽松）。 */

@@ -120,6 +120,9 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			instance.POST("/check500MbpsSupport", instanceCtrl.Check500MbpsSupport)
 			instance.POST("/enable500Mbps", instanceCtrl.Enable500Mbps)
 			instance.POST("/disable500Mbps", instanceCtrl.Disable500Mbps)
+			instance.POST("/bandwidth500/status", instanceCtrl.GetStatus500Mbps)
+			instance.POST("/bandwidth500/plan", instanceCtrl.Plan500Mbps)
+			instance.POST("/bandwidth500/migrate", instanceCtrl.Migrate500Mbps)
 		}
 
 		bootVolume := api.Group("/bootVolume")
