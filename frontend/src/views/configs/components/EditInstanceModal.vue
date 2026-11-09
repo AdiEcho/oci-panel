@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
-import { Loader2, AlertTriangle, Settings, HardDrive, Globe, Wrench, Zap, Info, ShieldCheck } from '@lucide/vue'
-import { instanceApi } from '@/api'
+import { Loader2, AlertTriangle, Settings, HardDrive, Globe, Wrench, Zap, Info, ShieldCheck, Layers } from '@lucide/vue'
+import { instanceApi, ociApi } from '@/api'
 import { toast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,8 +9,9 @@ import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Modal } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
+import { Select } from '@/components/ui/select'
 import type { Instance } from '@/views/configs/types'
-import type { Bandwidth500Summary, Bandwidth500PlanResponse } from '@/api/oci'
+import type { Bandwidth500Summary, Bandwidth500PlanResponse, ElbPoolItem } from '@/api/oci'
 
 const props = defineProps<{
   open: boolean
@@ -28,6 +29,9 @@ const bwLoading = ref(true)
 const bwStatus = ref<Bandwidth500Summary | null>(null)
 const bwPlan = ref<Bandwidth500PlanResponse | null>(null)
 const bwPlanLoading = ref(false)
+const elbOptions = ref<ElbPoolItem[]>([])
+const elbLoading = ref(false)
+let elbRequestId = 0
 let bwRequestId = 0
 
 const form = reactive({
@@ -42,12 +46,39 @@ const form = reactive({
 
 const bwForm = reactive({
   mode: 'shared-ports', // 默认推荐共享模式以规避配额限制
+  nlbId: '', // 可选：指定配置详情中预建的 ELB
   listenPort: 2202,
   backendPort: 22,
   sshPort: 22,
   retainNatGw: true, // 默认安全保留
   retainNlb: true
 })
+
+// 加载可用于本实例的 ELB：待分配的 + 当前已分配给本实例的
+const elbLabel = (nlbId?: string) => {
+  if (!nlbId) return ''
+  const elb = elbOptions.value.find(p => p.nlbId === nlbId)
+  return elb?.nlbName || nlbId
+}
+
+const loadElbOptions = async (userId: string, instanceId: string) => {
+  if (!userId) return
+  const reqId = ++elbRequestId
+  elbLoading.value = true
+  try {
+    const res = await ociApi.elbList(userId)
+    if (reqId !== elbRequestId) return // 已切换到其它实例，丢弃过期响应
+    elbOptions.value = (res.data || []).filter(
+      p => p.status !== 'failed' && (p.canAssign || p.instanceId === instanceId)
+    )
+    const current = elbOptions.value.find(p => p.instanceId === instanceId)
+    if (current && !bwForm.nlbId) bwForm.nlbId = current.nlbId
+  } catch {
+    if (reqId === elbRequestId) elbOptions.value = []
+  } finally {
+    if (reqId === elbRequestId) elbLoading.value = false
+  }
+}
 
 const fetchBwPlan = async (userId: string, instanceId: string) => {
   if (!userId || !instanceId) return
@@ -58,6 +89,7 @@ const fetchBwPlan = async (userId: string, instanceId: string) => {
       instanceId,
       mode: bwForm.mode,
       sshPort: bwForm.sshPort || 22,
+      nlbId: bwForm.mode === 'shared-ports' ? bwForm.nlbId || undefined : undefined,
       mappings:
         bwForm.mode === 'shared-ports'
           ? [
@@ -124,13 +156,18 @@ watch(
       form.vpusPerGB = props.instance.bootVolumeVpu || 10
       form.currentIpv6 = props.instance.ipv6 || ''
 
+      bwForm.nlbId = ''
+      elbOptions.value = []
       if (userId && instanceId) {
         fetchBwStatus(userId as string, instanceId as string)
+        loadElbOptions(userId as string, instanceId as string)
       }
     } else {
       bwStatus.value = null
       bwPlan.value = null
       bwLoading.value = false
+      bwForm.nlbId = ''
+      elbOptions.value = []
     }
   },
   { immediate: true }
@@ -301,7 +338,7 @@ const enable500Mbps = async () => {
   if (
     !confirm(
       bwForm.mode === 'shared-ports'
-        ? `将通过同 VCN 共享 NLB（监听端口 ${bwForm.listenPort} -> 后端 ${bwForm.backendPort}）及 NAT 网关开启 500Mbps，复用现有 NLB 避免配额超限，确定继续吗？`
+        ? `将通过共享 NLB${bwForm.nlbId ? `（${elbOptions.value.find(p => p.nlbId === bwForm.nlbId)?.nlbName || bwForm.nlbId}）` : ''}（监听端口 ${bwForm.listenPort} -> 后端 ${bwForm.backendPort}）及 NAT 网关开启 500Mbps，复用现有 NLB 避免配额超限，确定继续吗？`
         : '此操作将创建独享 NAT 网关和网络负载均衡器（占用 1 个 NLB 配额）来实现 500Mbps 下行带宽。确定继续吗？'
     )
   )
@@ -333,7 +370,8 @@ const enable500Mbps = async () => {
       instanceId: props.instance.id,
       sshPort: bwForm.sshPort || 22,
       mode: bwForm.mode,
-      mappings
+      mappings,
+      nlbId: bwForm.mode === 'shared-ports' ? bwForm.nlbId || undefined : undefined
     })
     toast.info('500Mbps 开启任务已提交，正在等待 OCI 云端配置生效...')
     await pollBwStatusUntilSettled(props.userId, props.instance.id, 'enable')
@@ -670,6 +708,10 @@ const resetBwStatus = async () => {
               </span>
               <Badge variant="success" class="text-[11px] py-0 px-2">正常生效中</Badge>
             </div>
+            <div v-if="bwStatus.nlbId" class="text-foreground">
+              <span class="text-muted-foreground">ELB:</span>
+              <span class="font-mono">{{ elbLabel(bwStatus.nlbId) }}</span>
+            </div>
             <div class="text-foreground">
               <span class="text-muted-foreground">NLB 公网访问 IP:</span>
               <span class="font-mono font-bold text-primary">{{ bwStatus.accessIp || '获取中...' }}</span>
@@ -826,6 +868,28 @@ const resetBwStatus = async () => {
             <p class="text-muted-foreground text-[11px] leading-relaxed">
               检测到第一台实例运行中，开启时系统将自动把现有 NLB 升级为共享池，使两台实例共享同一个 NLB 公网 IP，彻底规避配额超限。
             </p>
+          </div>
+
+          <!-- 指定预建 ELB -->
+          <div
+            v-if="bwForm.mode === 'shared-ports'"
+            class="p-3 bg-background/50 rounded-lg border border-border/60 space-y-1.5"
+          >
+            <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Layers class="w-3.5 h-3.5" />
+              使用的 ELB (网络负载均衡器)
+            </label>
+            <Select v-model="bwForm.nlbId" :disabled="elbLoading">
+              <option value="">自动选择 / 新建共享 ELB</option>
+              <option v-for="elb in elbOptions" :key="elb.nlbId" :value="elb.nlbId">
+                {{ elb.nlbName || elb.nlbId }}
+                {{ elb.accessIp ? `(${elb.accessIp})` : '' }}
+                {{ elb.instanceId === props.instance?.id ? '- 当前实例' : '- 待分配' }}
+              </option>
+            </Select>
+            <span class="text-[10px] text-muted-foreground block">
+              可先在配置详情「500Mbps ELB」卡片预建；留空则沿用自动复用/新建逻辑。
+            </span>
           </div>
 
           <!-- 共享模式端口配置 -->

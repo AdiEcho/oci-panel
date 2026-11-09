@@ -57,6 +57,29 @@ export interface Bandwidth500Summary {
   canMigrateToShared?: boolean
 }
 
+/** 500Mbps 所用 ELB（OCI 网络负载均衡器）池记录。 */
+export interface ElbPoolItem {
+  id: string
+  nlbId: string
+  nlbName: string
+  accessIp?: string
+  vcnId: string
+  vcnName?: string
+  subnetId?: string
+  compartmentId?: string
+  mode: string // shared-ports, dedicated
+  origin?: string // created, adopted, borrowed
+  status: string // available, assigned, missing, failed
+  instanceId?: string
+  instanceName?: string
+  memberCount?: number
+  canDelete: boolean
+  canAssign: boolean
+  lastError?: string
+  createdAt?: string
+  observedAt?: string
+}
+
 export interface Bandwidth500PlanResponse {
   planId: string
   instanceId: string
@@ -197,7 +220,12 @@ export const ociApi = {
   trafficVnics: (req: { configId: string; instanceId: string }) =>
     get<ValueLabel[]>('/oci/traffic/vnics', { params: req }),
   trafficData: (req: { configId: string; instanceId: string; vnicId: string; startTime: string; endTime: string }) =>
-    post<TrafficData>('/oci/traffic/data', req)
+    post<TrafficData>('/oci/traffic/data', req),
+
+  elbList: (configId: string) => post<ElbPoolItem[]>('/oci/elb/list', { configId }),
+  elbCreate: (req: { configId: string; vcnId: string; subnetId?: string; nlbName?: string }) =>
+    post<ElbPoolItem>('/oci/elb/create', req),
+  elbDelete: (req: { configId: string; nlbId: string }) => post('/oci/elb/delete', req)
 }
 
 /** VCN 安全规则相关接口（独立分组）。 */

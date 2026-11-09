@@ -19,6 +19,7 @@ import CloudShellModal from './CloudShellModal.vue'
 import VolumeEditModal from './VolumeEditModal.vue'
 import SecurityListModal from './SecurityListModal.vue'
 import CreateVcnModal from './CreateVcnModal.vue'
+import ElbPoolCard from './ElbPoolCard.vue'
 
 // 配置详情抽屉（C7 从 Configs.vue 抽出）：承载详情数据加载、5 个标签页、用户管理、实例操作、
 // 流量查询与 4 个子组件弹窗。逻辑由 Configs.vue 原样迁移（加载时序、懒加载 watch、刷新派发不变），
@@ -451,6 +452,7 @@ const openCreateVcn = () => {
               <!-- Basic Info Tab -->
               <div v-show="activeTab === 'basic'" class="space-y-6">
                 <BasicInfoTab :config-details="configDetails" :tenant="tabTenant" :loading="loadingTab" />
+                <ElbPoolCard :user-id="configDetails.userId" />
                 <UserListCard
                   v-if="tabTenant?.userList?.length"
                   :users="tabTenant.userList"

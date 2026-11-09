@@ -704,8 +704,28 @@ func (s *Bandwidth500Service) Plan500Mbps(ctx context.Context, user *models.OciU
 		var otherManagedDedicatedNlb *networkloadbalancer.NetworkLoadBalancerSummary
 		var otherInstanceID string
 
+		// 若已预建/指定了 ELB 池，优先按它生成计划
+		if req.Mode == ModeSharedPorts {
+			candidate := req.NLBID
+			if candidate == "" {
+				candidate = s.findAvailablePool(user.ID, vcnID)
+			}
+			if candidate != "" {
+				if _, pubIP, rErr := s.resolvePoolNlb(ctx, user, nlbClient, vcnID, candidate); rErr == nil {
+					resp.CanReuseNlb = true
+					resp.NlbID = candidate
+					resp.NlbAccessIP = pubIP
+				} else if req.NLBID != "" {
+					resp.Warnings = append(resp.Warnings, fmt.Sprintf("指定的 ELB 不可用: %v", rErr))
+				}
+			}
+		}
+
 		// 寻找同 VCN 的受管共享 NLB
 		for _, nlb := range activeItems {
+			if resp.CanReuseNlb {
+				break // 已由 ELB 池确定，不再覆盖
+			}
 			tags := nlb.FreeformTags
 			if tags != nil && tags[tagManagedKey] == tagManagedVal && tags[tagFeatureKey] == tagFeatureVal {
 				if tags[tagModeKey] == ModeSharedPorts {
@@ -929,8 +949,8 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 	var endpoints []models.Bandwidth500Endpoint
 
 	if req.Mode == ModeSharedPorts {
-		// 共享模式：确保共享 NLB (优先复用既有共享池，或原地升级既有独享 NLB 规避配额超限)
-		nlbID, publicIP, err = s.ensureSharedNlb(ctx, user, nlbClient, compartmentID, *vnic.SubnetId, vcnID)
+		// 共享模式：优先使用预建/指定的 ELB 池，其次复用既有共享池或原地升级独享 NLB 规避配额超限
+		nlbID, publicIP, err = s.acquireSharedNlb(ctx, user, nlbClient, compartmentID, *vnic.SubnetId, vcnID, req.NLBID)
 		if err != nil {
 			return "", recordFailure(err, "failed to ensure shared NLB")
 		}
@@ -1002,6 +1022,11 @@ func (s *Bandwidth500Service) Enable500MbpsOrchestrated(ctx context.Context, use
 	binding.LastError = ""
 	binding.ObservedHealth = "healthy"
 	_ = database.GetDB().Save(&binding).Error
+
+	// 共享模式下同步 ELB 池归属，避免该 ELB 被其他实例重复认领
+	if req.Mode == ModeSharedPorts {
+		s.markPoolAssigned(user, nlbID, req.InstanceID, vcnID)
+	}
 
 	op.Status = "succeeded"
 	op.Progress = 100
@@ -1512,6 +1537,7 @@ func (s *Bandwidth500Service) Disable500MbpsOrchestrated(ctx context.Context, us
 							_, _ = nlbClient.DeleteNetworkLoadBalancer(ctx, networkloadbalancer.DeleteNetworkLoadBalancerRequest{
 								NetworkLoadBalancerId: &nlbID,
 							})
+							s.deletePoolRecord(nlbID)
 						}
 					}
 				}
@@ -1544,6 +1570,9 @@ func (s *Bandwidth500Service) Disable500MbpsOrchestrated(ctx context.Context, us
 		binding.LastError = ""
 		binding.ObservedHealth = "unknown"
 		_ = database.GetDB().Save(&binding).Error
+
+		// ELB 已无任何成员时回池，供下台实例直接分配
+		s.releasePoolNlb(binding.NlbID)
 	}
 
 	return nil

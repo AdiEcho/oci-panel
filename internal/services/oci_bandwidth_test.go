@@ -231,3 +231,60 @@ func TestReset500MbpsStatus(t *testing.T) {
 		t.Error("expected binding to be deleted after reset")
 	}
 }
+
+func TestNlbPoolAssignmentLifecycle(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_elb_pool.db")
+	if err := database.InitDB(dbPath); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+
+	bwService := &Bandwidth500Service{}
+	user := &models.OciUser{ID: "user-1"}
+
+	// 1. 无成员时应可分配、可删除
+	if got := bwService.countEnabledMembers("nlb-1"); got != 0 {
+		t.Fatalf("expected 0 members, got %d", got)
+	}
+
+	// 2. 开启成功后将预建 ELB 标记为已分配
+	bwService.markPoolAssigned(user, "nlb-1", "inst-1", "vcn-1")
+	var pool models.Bandwidth500Pool
+	if err := database.GetDB().Where("nlb_id = ?", "nlb-1").First(&pool).Error; err != nil {
+		t.Fatalf("expected pool record created, got %v", err)
+	}
+	if pool.Status != PoolStatusAssigned || pool.InstanceID != "inst-1" {
+		t.Errorf("expected assigned to inst-1, got status=%s instance=%s", pool.Status, pool.InstanceID)
+	}
+	if pool.Origin != OriginAdopted {
+		t.Errorf("expected adopted origin for auto-created record, got %s", pool.Origin)
+	}
+
+	// 3. enabled 绑定使成员数变为 1
+	binding := models.Bandwidth500Binding{ID: "b-1", InstanceID: "inst-1", NlbID: "nlb-1", Status: StatusEnabled}
+	database.GetDB().Create(&binding)
+	if got := bwService.countEnabledMembers("nlb-1"); got != 1 {
+		t.Fatalf("expected 1 member, got %d", got)
+	}
+
+	// 4. 仍有成员时关闭不回收
+	bwService.releasePoolNlb("nlb-1")
+	database.GetDB().Where("nlb_id = ?", "nlb-1").First(&pool)
+	if pool.Status != PoolStatusAssigned {
+		t.Errorf("expected pool stay assigned while member exists, got %s", pool.Status)
+	}
+
+	// 5. 绑定停用后回池
+	binding.Status = StatusDisabled
+	database.GetDB().Save(&binding)
+	bwService.releasePoolNlb("nlb-1")
+	database.GetDB().Where("nlb_id = ?", "nlb-1").First(&pool)
+	if pool.Status != PoolStatusAvailable || pool.InstanceID != "" {
+		t.Errorf("expected pool released, got status=%s instance=%s", pool.Status, pool.InstanceID)
+	}
+
+	// 6. 云端 NLB 删除后清理记录
+	bwService.deletePoolRecord("nlb-1")
+	if err := database.GetDB().Where("nlb_id = ?", "nlb-1").First(&pool).Error; err == nil {
+		t.Error("expected pool record deleted")
+	}
+}

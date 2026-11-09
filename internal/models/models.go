@@ -426,5 +426,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&Bandwidth500Resource{},
 		&Bandwidth500Binding{},
 		&Bandwidth500Operation{},
+		&Bandwidth500Pool{},
 	)
 }

@@ -38,5 +38,6 @@ export type {
   TrafficCondition,
   TrafficData,
   SecurityListData,
-  AddSecurityRuleReq
+  AddSecurityRuleReq,
+  ElbPoolItem
 } from './oci'
