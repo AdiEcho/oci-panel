@@ -18,6 +18,7 @@ import EditInstanceModal from './EditInstanceModal.vue'
 import CloudShellModal from './CloudShellModal.vue'
 import VolumeEditModal from './VolumeEditModal.vue'
 import SecurityListModal from './SecurityListModal.vue'
+import CreateVcnModal from './CreateVcnModal.vue'
 
 // 配置详情抽屉（C7 从 Configs.vue 抽出）：承载详情数据加载、5 个标签页、用户管理、实例操作、
 // 流量查询与 4 个子组件弹窗。逻辑由 Configs.vue 原样迁移（加载时序、懒加载 watch、刷新派发不变），
@@ -66,6 +67,7 @@ const showEditInstanceModal = ref(false)
 const showCloudShellModal = ref(false)
 const showVolumeEditModal = ref(false)
 const showSecurityListModal = ref(false)
+const showCreateVcnModal = ref(false)
 const selectedInstance = ref<Instance | null>(null)
 const selectedVolume = ref<any>(null)
 const selectedVcn = ref<any>(null)
@@ -391,6 +393,9 @@ const openSecurityList = (vcn: any) => {
   selectedVcn.value = vcn
   showSecurityListModal.value = true
 }
+const openCreateVcn = () => {
+  showCreateVcnModal.value = true
+}
 </script>
 
 <template>
@@ -478,7 +483,7 @@ const openSecurityList = (vcn: any) => {
 
               <!-- VCNs Tab -->
               <div v-show="activeTab === 'vcns'">
-                <VcnsTab :vcns="tabVCNs" :loading="loadingTab" @security="openSecurityList" />
+                <VcnsTab :vcns="tabVCNs" :loading="loadingTab" @security="openSecurityList" @create="openCreateVcn" />
               </div>
 
               <!-- Traffic Tab -->
@@ -557,6 +562,7 @@ const openSecurityList = (vcn: any) => {
     :user-id="configDetails?.userId || ''"
     @refresh="loadVCNs(true)"
   />
+  <CreateVcnModal v-model:open="showCreateVcnModal" :user-id="configDetails?.userId || ''" @refresh="loadVCNs(true)" />
 </template>
 
 <style scoped>

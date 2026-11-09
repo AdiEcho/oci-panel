@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Loader2, Network, Shield } from '@lucide/vue'
+import { Loader2, Network, Plus, Shield } from '@lucide/vue'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 // 配置详情「VCN 网络」标签页（C7 从 Configs.vue 抽出，纯展示）。
-// 「安全列表」动作经 emit 上抛由抽屉打开 SecurityListModal。
+// 「安全列表」动作经 emit 上抛由抽屉打开 SecurityListModal；「新建VCN」同样经事件上抛。
 defineProps<{
   vcns: any[]
   loading: boolean
@@ -13,10 +13,17 @@ defineProps<{
 
 defineEmits<{
   security: [vcn: any]
+  create: []
 }>()
 </script>
 
 <template>
+  <div class="flex justify-end mb-4">
+    <Button size="sm" @click="$emit('create')">
+      <Plus class="w-4 h-4" />
+      新建VCN
+    </Button>
+  </div>
   <div v-if="loading" class="flex items-center justify-center py-12">
     <Loader2 class="w-10 h-10 animate-spin text-primary" />
   </div>
@@ -25,6 +32,10 @@ defineEmits<{
       <Network class="w-10 h-10 text-muted-foreground" />
     </div>
     <p class="text-muted-foreground text-lg">暂无VCN</p>
+    <Button class="mt-4" size="sm" variant="outline" @click="$emit('create')">
+      <Plus class="w-4 h-4" />
+      新建VCN
+    </Button>
   </div>
   <div v-else class="space-y-4">
     <Card v-for="vcn in vcns" :key="vcn.id" class="p-5">

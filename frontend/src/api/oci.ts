@@ -205,5 +205,7 @@ export const vcnApi = {
   securityList: (req: { configId: string; vcnId: string }) => post<SecurityListData>('/oci/vcn/securityList', req),
   addSecurityRule: (req: AddSecurityRuleReq) => post('/oci/vcn/addSecurityRule', req),
   releaseSecurityRules: (req: { configId: string; vcnId?: string }) => post('/oci/vcn/releaseSecurityRules', req),
-  delete: (req: { configId: string; vcnId?: string }) => post('/oci/vcn/delete', req)
+  delete: (req: { configId: string; vcnId?: string }) => post('/oci/vcn/delete', req),
+  create: (req: { configId: string; displayName?: string; cidrBlock?: string; isIpv6Enabled?: boolean }) =>
+    post<VCNInfo>('/oci/vcn/create', req)
 }

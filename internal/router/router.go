@@ -99,6 +99,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			oci.POST("/vcn/addSecurityRule", ociCtrl.AddSecurityRule)
 			oci.POST("/vcn/releaseSecurityRules", ociCtrl.ReleaseSecurityRules)
 			oci.POST("/vcn/delete", ociCtrl.DeleteVcn)
+			oci.POST("/vcn/create", ociCtrl.CreateVcn)
 			oci.POST("/images", ociCtrl.ListImages)
 		}
 

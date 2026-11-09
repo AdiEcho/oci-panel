@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
+	"net"
+	"time"
 
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/oracle/oci-go-sdk/v65/core"
@@ -84,6 +86,180 @@ func (s *OCIService) ListVCNs(ctx context.Context, user *models.OciUser, compart
 	}
 
 	return vcns, nil
+}
+
+// CreateVcnParams 新建 VCN 参数（VCN + Internet 网关 + 默认路由 + 公有子网，与新建机器时的自动建网逻辑一致）。
+type CreateVcnParams struct {
+	DisplayName   string
+	CidrBlock     string
+	IsIpv6Enabled bool
+}
+
+// CreateVcnWithNetwork 创建 VCN 并配套 Internet 网关、默认路由与公有子网。
+// 与新建机器时「无可用子网则自动建网」的路径共用同一套步骤（VCN → IGW → 0.0.0.0/0 路由 → 公有子网），
+// 入口开放给 VCN 页面，允许自定义名称、CIDR 与 IPv6。
+func (s *OCIService) CreateVcnWithNetwork(ctx context.Context, user *models.OciUser, params CreateVcnParams) (*models.VCNInfo, error) {
+	vnClient, err := s.GetVirtualNetworkClient(user)
+	if err != nil {
+		return nil, fmt.Errorf("获取网络客户端失败: %w", err)
+	}
+
+	compartmentId := user.OciTenantID
+
+	cidrBlock := params.CidrBlock
+	if cidrBlock == "" {
+		cidrBlock = "10.0.0.0/16"
+	}
+	if _, _, err := net.ParseCIDR(cidrBlock); err != nil {
+		return nil, fmt.Errorf("CIDR 格式不正确: %w", err)
+	}
+
+	displayName := params.DisplayName
+	if displayName == "" {
+		displayName = fmt.Sprintf("oci-panel-vcn-%d", time.Now().Unix())
+	}
+
+	// 1. 创建 VCN
+	isIpv6Enabled := params.IsIpv6Enabled
+	createVcnResp, err := vnClient.CreateVcn(ctx, core.CreateVcnRequest{
+		CreateVcnDetails: core.CreateVcnDetails{
+			CompartmentId: &compartmentId,
+			DisplayName:   &displayName,
+			CidrBlock:     &cidrBlock,
+			IsIpv6Enabled: &isIpv6Enabled,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建VCN失败: %w", err)
+	}
+	vcnResp, ok := waitForState(ctx, 30, time.Second,
+		func() (core.GetVcnResponse, error) {
+			return vnClient.GetVcn(ctx, core.GetVcnRequest{VcnId: createVcnResp.Id})
+		},
+		func(r core.GetVcnResponse) bool { return r.LifecycleState == core.VcnLifecycleStateAvailable })
+	if !ok {
+		return nil, fmt.Errorf("等待VCN创建超时")
+	}
+	vcn := vcnResp.Vcn
+
+	// 2. Internet 网关：新建 VCN 无网关，缺失即创建，已有则复用
+	igwResp, err := vnClient.ListInternetGateways(ctx, core.ListInternetGatewaysRequest{
+		CompartmentId: &compartmentId,
+		VcnId:         vcn.Id,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("获取Internet网关列表失败: %w", err)
+	}
+
+	var internetGatewayId *string
+	if len(igwResp.Items) == 0 {
+		igwName := displayName + "-igw"
+		isEnabled := true
+		createIgwResp, err := vnClient.CreateInternetGateway(ctx, core.CreateInternetGatewayRequest{
+			CreateInternetGatewayDetails: core.CreateInternetGatewayDetails{
+				CompartmentId: &compartmentId,
+				VcnId:         vcn.Id,
+				DisplayName:   &igwName,
+				IsEnabled:     &isEnabled,
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("创建Internet网关失败: %w", err)
+		}
+		_, ok := waitForState(ctx, 30, time.Second,
+			func() (core.GetInternetGatewayResponse, error) {
+				return vnClient.GetInternetGateway(ctx, core.GetInternetGatewayRequest{IgId: createIgwResp.Id})
+			},
+			func(r core.GetInternetGatewayResponse) bool {
+				return r.LifecycleState == core.InternetGatewayLifecycleStateAvailable
+			})
+		if !ok {
+			return nil, fmt.Errorf("等待Internet网关创建超时")
+		}
+		internetGatewayId = createIgwResp.Id
+	} else {
+		internetGatewayId = igwResp.Items[0].Id
+	}
+
+	// 3. 默认路由表补 0.0.0.0/0 指向 Internet 网关
+	if vcn.DefaultRouteTableId != nil {
+		getRtResp, err := vnClient.GetRouteTable(ctx, core.GetRouteTableRequest{RtId: vcn.DefaultRouteTableId})
+		if err == nil {
+			hasDefaultRoute := false
+			for _, rule := range getRtResp.RouteRules {
+				if rule.Destination != nil && *rule.Destination == "0.0.0.0/0" {
+					hasDefaultRoute = true
+					break
+				}
+			}
+			if !hasDefaultRoute {
+				destination := "0.0.0.0/0"
+				updatedRules := append(getRtResp.RouteRules, core.RouteRule{
+					Destination:     &destination,
+					DestinationType: core.RouteRuleDestinationTypeCidrBlock,
+					NetworkEntityId: internetGatewayId,
+				})
+				_, err = vnClient.UpdateRouteTable(ctx, core.UpdateRouteTableRequest{
+					RtId: vcn.DefaultRouteTableId,
+					UpdateRouteTableDetails: core.UpdateRouteTableDetails{
+						RouteRules: updatedRules,
+					},
+				})
+				if err != nil {
+					return nil, fmt.Errorf("更新路由表失败: %w", err)
+				}
+			}
+		}
+	}
+
+	// 4. 公有子网（允许公网 IP）
+	subnetName := displayName + "-subnet"
+	prohibitPublicIp := false
+	createSubnetResp, err := vnClient.CreateSubnet(ctx, core.CreateSubnetRequest{
+		CreateSubnetDetails: core.CreateSubnetDetails{
+			CompartmentId:          &compartmentId,
+			VcnId:                  vcn.Id,
+			DisplayName:            &subnetName,
+			CidrBlock:              &cidrBlock,
+			RouteTableId:           vcn.DefaultRouteTableId,
+			ProhibitPublicIpOnVnic: &prohibitPublicIp,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建子网失败: %w", err)
+	}
+	subnetResp, ok := waitForState(ctx, 30, time.Second,
+		func() (core.GetSubnetResponse, error) {
+			return vnClient.GetSubnet(ctx, core.GetSubnetRequest{SubnetId: createSubnetResp.Id})
+		},
+		func(r core.GetSubnetResponse) bool { return r.LifecycleState == core.SubnetLifecycleStateAvailable })
+	if !ok {
+		return nil, fmt.Errorf("等待子网创建超时")
+	}
+
+	info := &models.VCNInfo{
+		ID:          *vcn.Id,
+		DisplayName: displayName,
+		CIDRBlock:   cidrBlock,
+		State:       string(vcn.LifecycleState),
+		Subnets: []models.SubnetInfo{
+			{
+				ID:          *subnetResp.Subnet.Id,
+				DisplayName: subnetName,
+				CIDRBlock:   cidrBlock,
+				State:       string(subnetResp.Subnet.LifecycleState),
+				IsPublic:    true,
+			},
+		},
+	}
+	if vcn.TimeCreated != nil {
+		info.CreateTime = vcn.TimeCreated.Format("2006-01-02 15:04:05")
+	}
+	if subnetResp.Subnet.AvailabilityDomain != nil {
+		info.Subnets[0].AvailabilityDomain = *subnetResp.Subnet.AvailabilityDomain
+	}
+
+	return info, nil
 }
 
 // GetPrivateIpIdForVnic 获取VNIC的私有IP的OCID

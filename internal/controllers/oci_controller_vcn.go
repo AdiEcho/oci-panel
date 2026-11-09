@@ -5,10 +5,12 @@ import (
 	"net/http"
 
 	"github.com/adiecho/oci-panel/internal/models"
+	"github.com/adiecho/oci-panel/internal/services"
+	"github.com/adiecho/oci-panel/internal/util"
 	"github.com/gin-gonic/gin"
 )
 
-// oci_controller_vcn.go — VCN 与安全规则：查询安全列表、添加规则、一键放行、删除 VCN。
+// oci_controller_vcn.go — VCN 与安全规则：新建 VCN、查询安全列表、添加规则、一键放行、删除 VCN。
 
 // GetSecurityListRequest 获取安全列表请求
 type GetSecurityListRequest struct {
@@ -110,6 +112,43 @@ func (oc *OciController) ReleaseSecurityRules(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(nil, "安全规则放行成功"))
+}
+
+// CreateVcnRequest 新建VCN请求
+type CreateVcnRequest struct {
+	ConfigID      string `json:"configId" binding:"required"`
+	DisplayName   string `json:"displayName"`
+	CidrBlock     string `json:"cidrBlock"`
+	IsIpv6Enabled bool   `json:"isIpv6Enabled"`
+}
+
+// CreateVcn 新建VCN（含Internet网关、默认路由与公有子网）
+func (oc *OciController) CreateVcn(c *gin.Context) {
+	var req CreateVcnRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, err.Error()))
+		return
+	}
+
+	user, ok := oc.loadUser(c, req.ConfigID)
+	if !ok {
+		return
+	}
+
+	ctx := context.Background()
+	vcn, err := oc.ociService.CreateVcnWithNetwork(ctx, &user, services.CreateVcnParams{
+		DisplayName:   req.DisplayName,
+		CidrBlock:     req.CidrBlock,
+		IsIpv6Enabled: req.IsIpv6Enabled,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
+		return
+	}
+
+	util.Go("UpdateConfigCache", func() { oc.schedulerService.UpdateConfigCache(req.ConfigID) })
+
+	c.JSON(http.StatusOK, models.SuccessResponse(vcn, "VCN创建成功"))
 }
 
 // DeleteVcnRequest 删除VCN请求
