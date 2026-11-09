@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:24-alpine AS frontend-builder
+FROM node:24.22.2-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS backend-builder
 ARG TARGETARCH
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -18,7 +18,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w" -o oci-panel main.go
 
 # Stage 3: Final minimal image
-FROM alpine:3.21
+FROM alpine:3.24
 WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=backend-builder /app/oci-panel .
