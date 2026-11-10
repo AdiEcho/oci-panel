@@ -452,7 +452,6 @@ const openCreateVcn = () => {
               <!-- Basic Info Tab -->
               <div v-show="activeTab === 'basic'" class="space-y-6">
                 <BasicInfoTab :config-details="configDetails" :tenant="tabTenant" :loading="loadingTab" />
-                <ElbPoolCard :user-id="configDetails.userId" />
                 <UserListCard
                   v-if="tabTenant?.userList?.length"
                   :users="tabTenant.userList"
@@ -484,8 +483,10 @@ const openCreateVcn = () => {
               </div>
 
               <!-- VCNs Tab -->
-              <div v-show="activeTab === 'vcns'">
+              <div v-show="activeTab === 'vcns'" class="space-y-6">
                 <VcnsTab :vcns="tabVCNs" :loading="loadingTab" @security="openSecurityList" @create="openCreateVcn" />
+                <!-- 500Mbps 所用 ELB：可先创建、后分配给实例 -->
+                <ElbPoolCard :user-id="configDetails.userId" />
               </div>
 
               <!-- Traffic Tab -->
