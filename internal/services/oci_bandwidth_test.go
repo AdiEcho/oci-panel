@@ -288,3 +288,18 @@ func TestNlbPoolAssignmentLifecycle(t *testing.T) {
 		t.Error("expected pool record deleted")
 	}
 }
+
+func TestWithinPoolGrace(t *testing.T) {
+	// 刚创建：处于宽限期，不应被判为云端丢失
+	if !withinPoolGrace(time.Now()) {
+		t.Error("expected fresh pool record to be within grace")
+	}
+	// 超过宽限期：允许判定丢失
+	if withinPoolGrace(time.Now().Add(-poolProvisionGrace - time.Minute)) {
+		t.Error("expected old pool record to be out of grace")
+	}
+	// 零值时间：保守判定为超期
+	if withinPoolGrace(time.Time{}) {
+		t.Error("expected zero time to be out of grace")
+	}
+}

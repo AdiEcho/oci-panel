@@ -28,6 +28,7 @@ let pollTimer: ReturnType<typeof setTimeout> | undefined
 
 const availableCount = computed(() => pools.value.filter(p => p.status === 'available').length)
 const assignedCount = computed(() => pools.value.filter(p => p.status === 'assigned').length)
+const provisioningCount = computed(() => pools.value.filter(p => p.status === 'provisioning').length)
 
 const statusMeta = (status: string) => {
   switch (status) {
@@ -167,8 +168,8 @@ onUnmounted(stopPolling)
           500Mbps ELB (网络负载均衡器)
         </h4>
         <p class="text-[11px] text-muted-foreground mt-1">
-          先创建 ELB 占住配额，之后可分配给任意 AMD 实例；待分配 {{ availableCount }} · 已分配
-          {{ assignedCount }}
+          先创建 ELB 占住配额，之后可分配给任意 AMD 实例；待分配 {{ availableCount }} · 已分配 {{ assignedCount }}
+          <template v-if="provisioningCount">· 创建中 {{ provisioningCount }}</template>
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -287,6 +288,10 @@ onUnmounted(stopPolling)
             已分配给 {{ pool.instanceName || pool.instanceId }}
             <template v-if="(pool.memberCount || 0) > 1">，共 {{ pool.memberCount }} 台实例共享</template>
           </span>
+        </div>
+        <div v-else-if="pool.status === 'provisioning'" class="flex items-center gap-1.5 text-info">
+          <Loader2 class="w-3.5 h-3.5 animate-spin shrink-0" />
+          <span>云端正在创建 ELB，通常需要 1-3 分钟，完成后自动变为「待分配」。</span>
         </div>
         <div
           v-else-if="pool.status === 'available' && pool.canAssign"

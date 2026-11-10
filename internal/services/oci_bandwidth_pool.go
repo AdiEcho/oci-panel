@@ -135,18 +135,22 @@ func (s *Bandwidth500Service) ListNlbPools(ctx context.Context, user *models.Oci
 			if !pool.CreatedAt.IsZero() && view.CreatedAt == "" {
 				view.CreatedAt = pool.CreatedAt.Format("2006-01-02 15:04:05")
 			}
-			if pool.Status == PoolStatusProvisioning {
+			if pool.Status == PoolStatusProvisioning || pool.Status == PoolStatusFailed {
 				if view.AccessIP == "" {
-					view.Status = PoolStatusProvisioning
+					// 失败记录保留失败状态与原因，创建中则显示创建中
+					if pool.Status == PoolStatusFailed {
+						view.Status = PoolStatusFailed
+					} else {
+						view.Status = PoolStatusProvisioning
+					}
 				} else {
-					// 后台等待已拿到公网 IP，顺手把记录推进到可用
+					// 云端已可用，顺手把记录推进到可用并清除历史错误
 					pool.Status = PoolStatusAvailable
 					pool.AccessIP = view.AccessIP
+					pool.LastError = ""
+					view.LastError = ""
 					_ = database.GetDB().Save(&pool).Error
 				}
-			}
-			if pool.Status == PoolStatusFailed && view.AccessIP == "" {
-				view.Status = PoolStatusFailed
 			}
 		}
 		if view.Origin == "" {
@@ -181,14 +185,15 @@ func (s *Bandwidth500Service) ListNlbPools(ctx context.Context, user *models.Oci
 		views = append(views, view)
 	}
 
-	// 库中存在但云端已消失的记录
+	// 库中存在、但 active 列表里没有的记录：可能正在创建、刚创建完或确实已丢失。
+	// 不能一律标记「云端丢失」，否则新建 ELB 后页面会先闪出误导性的丢失提示。
 	var orphans []models.Bandwidth500Pool
 	if dbErr := database.GetDB().Where("user_id = ?", user.ID).Find(&orphans).Error; dbErr == nil {
 		for _, pool := range orphans {
 			if seen[pool.NlbID] {
 				continue
 			}
-			views = append(views, models.Bandwidth500PoolView{
+			view := models.Bandwidth500PoolView{
 				ID:            pool.ID,
 				NlbID:         pool.NlbID,
 				NlbName:       pool.NlbName,
@@ -199,13 +204,12 @@ func (s *Bandwidth500Service) ListNlbPools(ctx context.Context, user *models.Oci
 				CompartmentID: pool.CompartmentID,
 				Mode:          ModeSharedPorts,
 				Origin:        pool.Origin,
-				Status:        PoolStatusMissing,
 				InstanceID:    pool.InstanceID,
 				InstanceName:  s.instanceDisplayName(user, pool.InstanceID),
-				LastError:     "云端 NLB 已不存在，请在 OCI 控制台核查或删除此记录",
 				CreatedAt:     pool.CreatedAt.Format("2006-01-02 15:04:05"),
 				ObservedAt:    now,
-			})
+			}
+			views = append(views, s.resolvePendingPool(ctx, nlbClient, pool, view))
 		}
 	}
 
@@ -349,6 +353,72 @@ func (s *Bandwidth500Service) CreateNlbPool(ctx context.Context, user *models.Oc
 		CanDelete:     true,
 		ObservedAt:    time.Now().UTC().Format(time.RFC3339),
 	}, nil
+}
+
+// poolProvisionGrace 新建 ELB 在云端尚未进入 active 列表时的宽限时间。
+// 期间即使 active 列表或 Get 查不到，也只显示「创建中」，不误判为云端丢失。
+const poolProvisionGrace = 15 * time.Minute
+
+func withinPoolGrace(createdAt time.Time) bool {
+	if createdAt.IsZero() {
+		return false
+	}
+	return time.Since(createdAt) < poolProvisionGrace
+}
+
+// resolvePendingPool 处理「本地有池记录、但 active 列表里没有」的 ELB：
+// 正在创建 / 刚创建完 / 确实丢失 三种情况必须区分，避免新建后页面闪现「云端丢失」。
+func (s *Bandwidth500Service) resolvePendingPool(ctx context.Context, nlbClient networkloadbalancer.NetworkLoadBalancerClient, pool models.Bandwidth500Pool, view models.Bandwidth500PoolView) models.Bandwidth500PoolView {
+	view.CanDelete = false
+	if pool.NlbID == "" {
+		view.Status = PoolStatusFailed
+		view.LastError = pool.LastError
+		return view
+	}
+
+	detail, err := nlbClient.GetNetworkLoadBalancer(ctx, networkloadbalancer.GetNetworkLoadBalancerRequest{
+		NetworkLoadBalancerId: &pool.NlbID,
+	})
+	if err == nil {
+		publicIP := getPublicIPFromNlbAddresses(detail.IpAddresses)
+		if publicIP != "" {
+			view.AccessIP = publicIP
+		}
+		if detail.LifecycleState == networkloadbalancer.LifecycleStateActive && publicIP != "" {
+			// 后台等待可能超时或进程重启，这里顺手把记录修正为可用
+			view.Status = PoolStatusAvailable
+			view.CanAssign = true
+			view.CanDelete = true
+			view.LastError = ""
+			_ = database.GetDB().Model(&models.Bandwidth500Pool{}).Where("id = ?", pool.ID).Updates(map[string]any{
+				"status": PoolStatusAvailable, "access_ip": publicIP, "last_error": "",
+			}).Error
+			return view
+		}
+		// 仍在 CREATING / UPDATING，属于正常创建过程
+		view.Status = PoolStatusProvisioning
+		view.CanDelete = true
+		view.LastError = ""
+		return view
+	}
+
+	if isNotFoundError(err) {
+		if withinPoolGrace(pool.CreatedAt) && (pool.Status == PoolStatusProvisioning || pool.Status == PoolStatusFailed) {
+			view.Status = pool.Status
+			view.LastError = pool.LastError
+			view.CanDelete = true
+			return view
+		}
+	} else if withinPoolGrace(pool.CreatedAt) && pool.Status == PoolStatusProvisioning {
+		// 暂时无法核验（权限、网络波动）时也不立即判丢失
+		view.Status = PoolStatusProvisioning
+		view.CanDelete = true
+		return view
+	}
+
+	view.Status = PoolStatusMissing
+	view.LastError = "云端 NLB 已不存在，请在 OCI 控制台核查或删除此记录"
+	return view
 }
 
 // DeleteNlbPool 删除一个未分配（无任何 enabled 成员）的受管 ELB
