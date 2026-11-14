@@ -34,6 +34,11 @@ const routes = [
         component: () => import('@/views/Keys.vue')
       },
       {
+        path: 'proxies',
+        name: 'Proxies',
+        component: () => import('@/views/Proxies.vue')
+      },
+      {
         path: 'presets',
         name: 'Presets',
         component: () => import('@/views/Presets.vue')

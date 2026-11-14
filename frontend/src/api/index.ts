@@ -16,6 +16,9 @@ export type { TelegramConfig } from './telegram'
 export { presetApi } from './preset'
 export type { Preset, PresetForm } from './preset'
 
+export { proxyApi } from './proxy'
+export type { ProxyItem, ProxyListReq, ProxySaveReq, ProxyTestReq, ProxyTestResult, ProxyProtocol } from './proxy'
+
 export { keyApi } from './key'
 export type { KeyItem, KeyListReq } from './key'
 

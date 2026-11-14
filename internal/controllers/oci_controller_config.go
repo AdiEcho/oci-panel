@@ -139,6 +139,26 @@ func (oc *OciController) UserPage(c *gin.Context) {
 		}
 	}
 
+	// 回填代理绑定信息，列表页直接展示每个配置使用的代理名称。
+	proxyIDs := make([]string, 0, len(users))
+	for i, user := range users {
+		responseList[i].ProxyID = user.ProxyID
+		if user.ProxyID != "" {
+			proxyIDs = append(proxyIDs, user.ProxyID)
+		}
+	}
+	if len(proxyIDs) > 0 {
+		var proxies []models.ProxyConfig
+		database.GetDB().Select("id", "name").Where("id IN ?", proxyIDs).Find(&proxies)
+		names := make(map[string]string, len(proxies))
+		for _, p := range proxies {
+			names[p.ID] = p.Name
+		}
+		for i := range responseList {
+			responseList[i].ProxyName = names[responseList[i].ProxyID]
+		}
+	}
+
 	c.JSON(http.StatusOK, models.SuccessResponse(UserPageResponse{
 		List:     responseList,
 		Total:    total,
@@ -155,6 +175,7 @@ type AddCfgRequest struct {
 	OciFingerprint string `json:"ociFingerprint" binding:"required"`
 	OciRegion      string `json:"ociRegion" binding:"required"`
 	OciKeyPath     string `json:"ociKeyPath" binding:"required"`
+	ProxyID        string `json:"proxyId"`
 }
 
 func (oc *OciController) AddCfg(c *gin.Context) {
@@ -168,6 +189,20 @@ func (oc *OciController) AddCfg(c *gin.Context) {
 		return
 	}
 
+	// 添加配置时可直接指定代理，后续拉取租户信息即经该代理发出。
+	proxyID := strings.TrimSpace(req.ProxyID)
+	if proxyID != "" {
+		var proxy models.ProxyConfig
+		if err := database.GetDB().Where("id = ?", proxyID).First(&proxy).Error; err != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "代理不存在"))
+			return
+		}
+		if !proxy.Enabled {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "代理已禁用，无法使用"))
+			return
+		}
+	}
+
 	user := models.OciUser{
 		ID:             uuid.New().String(),
 		Username:       req.Username,
@@ -177,6 +212,7 @@ func (oc *OciController) AddCfg(c *gin.Context) {
 		OciFingerprint: req.OciFingerprint,
 		OciRegion:      req.OciRegion,
 		OciKeyPath:     req.OciKeyPath,
+		ProxyID:        proxyID,
 		CreateTime:     time.Now(),
 	}
 
@@ -203,9 +239,10 @@ func (oc *OciController) AddCfg(c *gin.Context) {
 }
 
 type UpdateCfgNameRequest struct {
-	ID         string `json:"id" binding:"required"`
-	Username   string `json:"username" binding:"required"`
-	OciKeyPath string `json:"ociKeyPath"`
+	ID         string  `json:"id" binding:"required"`
+	Username   string  `json:"username" binding:"required"`
+	OciKeyPath string  `json:"ociKeyPath"`
+	ProxyID    *string `json:"proxyId"`
 }
 
 func (oc *OciController) UpdateCfgName(c *gin.Context) {
@@ -225,6 +262,26 @@ func (oc *OciController) UpdateCfgName(c *gin.Context) {
 			return
 		}
 		updates["oci_key_path"] = req.OciKeyPath
+	}
+
+	// 指针为空表示未提交该字段，保持不变；空字符串表示改为直连。
+	if req.ProxyID != nil {
+		proxyID := strings.TrimSpace(*req.ProxyID)
+		if proxyID != "" {
+			var proxy models.ProxyConfig
+			if err := database.GetDB().Where("id = ?", proxyID).First(&proxy).Error; err != nil {
+				c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "代理不存在"))
+				return
+			}
+			// 允许保留已绑定的禁用代理（此时按直连处理），但不允许新绑定禁用代理。
+			var current models.OciUser
+			database.GetDB().Select("proxy_id").Where("id = ?", req.ID).First(&current)
+			if !proxy.Enabled && proxy.ID != current.ProxyID {
+				c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "代理已禁用，无法使用"))
+				return
+			}
+		}
+		updates["proxy_id"] = proxyID
 	}
 
 	if err := database.GetDB().Model(&models.OciUser{}).Where("id = ?", req.ID).Updates(updates).Error; err != nil {

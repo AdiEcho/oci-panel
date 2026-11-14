@@ -9,6 +9,7 @@ import {
   ListTodo,
   Key,
   FileText,
+  Network,
   Settings,
   LogOut,
   Menu,
@@ -34,6 +35,7 @@ const navItems = [
   { path: '/configs', label: '配置管理', icon: Settings2 },
   { path: '/tasks', label: '任务列表', icon: ListTodo },
   { path: '/keys', label: '密钥管理', icon: Key },
+  { path: '/proxies', label: '代理管理', icon: Network },
   { path: '/presets', label: '预设配置', icon: Package },
   { path: '/logs', label: '实时日志', icon: FileText },
   { path: '/settings', label: '系统设置', icon: Settings }

@@ -3,12 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/adiecho/oci-panel/internal/config"
+	"github.com/adiecho/oci-panel/internal/database"
 	"github.com/adiecho/oci-panel/internal/models"
 	"github.com/adiecho/oci-panel/internal/util"
 	"github.com/oracle/oci-go-sdk/v65/common"
@@ -20,8 +22,9 @@ import (
 )
 
 type OCIService struct {
-	cfg         *config.Config
-	clientCache sync.Map
+	cfg          *config.Config
+	proxyService *ProxyService
+	clientCache  sync.Map
 }
 
 // Include the credential revision so an in-flight request holding an old user
@@ -33,6 +36,7 @@ type clientCacheKey struct {
 	ociUserID   string
 	fingerprint string
 	keyPath     string
+	proxyID     string
 }
 
 type cachedClients struct {
@@ -43,11 +47,36 @@ type cachedClients struct {
 	identity       *identity.IdentityClient
 	monitoring     *monitoring.MonitoringClient
 	nlb            *networkloadbalancer.NetworkLoadBalancerClient
+	httpClient     *http.Client
 	mu             sync.Mutex
 }
 
 func NewOCIService(cfg *config.Config) *OCIService {
-	return &OCIService{cfg: cfg}
+	return &OCIService{cfg: cfg, proxyService: NewProxyService()}
+}
+
+// ProxyService 暴露代理传输层，供代理管理与缓存失效使用。
+func (s *OCIService) ProxyService() *ProxyService {
+	return s.proxyService
+}
+
+// applyHTTPClient 把配置绑定的代理注入 SDK 客户端；未绑定代理或代理禁用时保持 SDK 默认传输。
+func (cc *cachedClients) applyHTTPClient(base *common.BaseClient) {
+	if cc.httpClient != nil {
+		base.HTTPClient = cc.httpClient
+	}
+}
+
+// loadProxy 读取配置绑定的代理记录；代理不存在时回退直连，避免残留引用导致配置不可用。
+func (s *OCIService) loadProxy(proxyID string) (*models.ProxyConfig, error) {
+	if strings.TrimSpace(proxyID) == "" || database.DB == nil {
+		return nil, nil
+	}
+	var proxy models.ProxyConfig
+	if err := database.DB.Where("id = ?", proxyID).First(&proxy).Error; err != nil {
+		return nil, nil
+	}
+	return &proxy, nil
 }
 
 func stringPtr(s string) *string {
@@ -133,6 +162,7 @@ func (s *OCIService) getCachedClientsForRegion(user *models.OciUser, region stri
 	cacheKey := clientCacheKey{
 		userID: user.ID, region: region, tenantID: user.OciTenantID,
 		ociUserID: user.OciUserID, fingerprint: user.OciFingerprint, keyPath: user.OciKeyPath,
+		proxyID: user.ProxyID,
 	}
 	if cached, ok := s.clientCache.Load(cacheKey); ok {
 		return cached.(*cachedClients), nil
@@ -144,6 +174,18 @@ func (s *OCIService) getCachedClientsForRegion(user *models.OciUser, region stri
 	}
 
 	cc := &cachedClients{configProvider: configProvider}
+	// 代理记录在缓存未命中时才查询；代理变更时由控制器主动失效相关缓存。
+	proxyConfig, err := s.loadProxy(user.ProxyID)
+	if err != nil {
+		return nil, err
+	}
+	if proxyConfig != nil {
+		httpClient, err := s.proxyService.HTTPClient(proxyConfig)
+		if err != nil {
+			return nil, err
+		}
+		cc.httpClient = httpClient
+	}
 	actual, _ := s.clientCache.LoadOrStore(cacheKey, cc)
 	return actual.(*cachedClients), nil
 }
@@ -165,6 +207,7 @@ func (s *OCIService) GetComputeClient(user *models.OciUser) (core.ComputeClient,
 	if err != nil {
 		return core.ComputeClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.compute = &client
 	return client, nil
 }
@@ -186,6 +229,7 @@ func (s *OCIService) GetVirtualNetworkClient(user *models.OciUser) (core.Virtual
 	if err != nil {
 		return core.VirtualNetworkClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.network = &client
 	return client, nil
 }
@@ -207,6 +251,7 @@ func (s *OCIService) GetBlockstorageClient(user *models.OciUser) (core.Blockstor
 	if err != nil {
 		return core.BlockstorageClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.blockstorage = &client
 	return client, nil
 }
@@ -228,6 +273,7 @@ func (s *OCIService) GetIdentityClient(user *models.OciUser) (identity.IdentityC
 	if err != nil {
 		return identity.IdentityClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.identity = &client
 	return client, nil
 }
@@ -241,6 +287,13 @@ func (s *OCIService) GetIdentityDomainsClient(user *models.OciUser, endpoint str
 	client, err := identitydomains.NewIdentityDomainsClientWithConfigurationProvider(configProvider, endpoint)
 	if err != nil {
 		return identitydomains.IdentityDomainsClient{}, err
+	}
+
+	// 该客户端不参与 user+region 缓存，需单独注入代理。
+	if proxyConfig, proxyErr := s.loadProxy(user.ProxyID); proxyErr == nil && proxyConfig != nil {
+		if httpClient, proxyErr := s.proxyService.HTTPClient(proxyConfig); proxyErr == nil && httpClient != nil {
+			client.HTTPClient = httpClient
+		}
 	}
 
 	return client, nil
@@ -263,6 +316,7 @@ func (s *OCIService) GetMonitoringClient(user *models.OciUser) (monitoring.Monit
 	if err != nil {
 		return monitoring.MonitoringClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.monitoring = &client
 	return client, nil
 }
@@ -284,6 +338,7 @@ func (s *OCIService) GetNetworkLoadBalancerClient(user *models.OciUser) (network
 	if err != nil {
 		return networkloadbalancer.NetworkLoadBalancerClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.nlb = &client
 	return client, nil
 }
@@ -325,6 +380,7 @@ func (s *OCIService) GetComputeClientForRegion(user *models.OciUser, region stri
 	if err != nil {
 		return core.ComputeClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.compute = &client
 	return client, nil
 }
@@ -346,6 +402,7 @@ func (s *OCIService) GetVirtualNetworkClientForRegion(user *models.OciUser, regi
 	if err != nil {
 		return core.VirtualNetworkClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.network = &client
 	return client, nil
 }
@@ -367,6 +424,7 @@ func (s *OCIService) GetIdentityClientForRegion(user *models.OciUser, region str
 	if err != nil {
 		return identity.IdentityClient{}, err
 	}
+	cc.applyHTTPClient(&client.BaseClient)
 	cc.identity = &client
 	return client, nil
 }
@@ -377,6 +435,24 @@ func (s *OCIService) InvalidateClientCache(userID string) {
 		if k, ok := key.(clientCacheKey); ok && k.userID == userID {
 			s.clientCache.Delete(key)
 		}
+		return true
+	})
+}
+
+// InvalidateClientsByProxy 清除所有绑定指定代理的配置客户端缓存（代理参数或启用状态变化时调用）。
+func (s *OCIService) InvalidateClientsByProxy(proxyID string) {
+	s.clientCache.Range(func(key, value any) bool {
+		if k, ok := key.(clientCacheKey); ok && k.proxyID == proxyID {
+			s.clientCache.Delete(key)
+		}
+		return true
+	})
+}
+
+// InvalidateAllClientCache 清空全部客户端缓存（批量变更代理绑定时调用）。
+func (s *OCIService) InvalidateAllClientCache() {
+	s.clientCache.Range(func(key, value any) bool {
+		s.clientCache.Delete(key)
 		return true
 	})
 }

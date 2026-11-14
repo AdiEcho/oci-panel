@@ -14,9 +14,20 @@ import {
   Upload,
   X,
   Check,
-  MoreHorizontal
+  MoreHorizontal,
+  Network
 } from '@lucide/vue'
-import { ociApi, taskApi, presetApi, keyApi, type KeyItem, type ImageInfo, type Preset } from '@/api'
+import {
+  ociApi,
+  taskApi,
+  presetApi,
+  keyApi,
+  proxyApi,
+  type KeyItem,
+  type ImageInfo,
+  type Preset,
+  type ProxyItem
+} from '@/api'
 import { toast } from '@/composables/useToast'
 import { useSelection } from '@/composables/useSelection'
 import { usePagination } from '@/composables/usePagination'
@@ -28,6 +39,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
@@ -52,6 +64,7 @@ const {
 const showAddModal = ref(false)
 const showCreateInstanceModal = ref(false)
 const showBatchCreateModal = ref(false)
+const showBatchProxyModal = ref(false)
 const detailsOpen = ref(false)
 const editingConfig = ref<Config | null>(null)
 const selectedConfigForInstance = ref<Config | null>(null)
@@ -68,7 +81,7 @@ const uploadedFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement>()
 
 // 表单
-const form = ref({ username: '', configContent: '' })
+const form = ref({ username: '', configContent: '', proxyId: '' })
 const instanceForm = ref({
   ociRegion: '',
   ocpus: 1,
@@ -87,6 +100,9 @@ const availableImages = ref<ImageInfo[]>([])
 const filteredImages = ref<ImageInfo[]>([])
 const presets = ref<Preset[]>([])
 const selectedPresetId = ref('')
+const proxies = ref<ProxyItem[]>([])
+const batchProxyId = ref('')
+const bindingProxy = ref(false)
 
 // 工具函数
 const parseConfigContent = (content: string) => {
@@ -123,6 +139,15 @@ const loadSSHKeys = async () => {
     sshKeys.value = response.data || []
   } catch {
     sshKeys.value = []
+  }
+}
+
+const loadProxies = async () => {
+  try {
+    const response = await proxyApi.list()
+    proxies.value = response.data || []
+  } catch {
+    proxies.value = []
   }
 }
 
@@ -186,10 +211,14 @@ const handleSearch = debounce(() => {
   clearSelection()
   loadConfigs(1)
 }, 300)
+const openAddModal = async () => {
+  await loadProxies()
+  showAddModal.value = true
+}
 const closeModal = () => {
   showAddModal.value = false
   editingConfig.value = null
-  form.value = { username: '', configContent: '' }
+  form.value = { username: '', configContent: '', proxyId: '' }
   uploadedFile.value = null
 }
 const handleFileDrop = (e: DragEvent) => {
@@ -224,7 +253,8 @@ const submitForm = async () => {
       await ociApi.updateCfgName({
         id: editingConfig.value.id,
         username: form.value.username,
-        ociKeyPath: uploadedFile.value ? keyPath : undefined
+        ociKeyPath: uploadedFile.value ? keyPath : undefined,
+        proxyId: form.value.proxyId
       })
       toast.success('配置已更新')
     } else {
@@ -232,7 +262,8 @@ const submitForm = async () => {
         username: form.value.username,
         tenantName: form.value.username,
         ...parsedConfig,
-        ociKeyPath: keyPath
+        ociKeyPath: keyPath,
+        proxyId: form.value.proxyId || undefined
       })
       toast.success('配置已添加')
     }
@@ -245,12 +276,14 @@ const submitForm = async () => {
   }
 }
 
-const editConfig = (config: Config) => {
+const editConfig = async (config: Config) => {
   editingConfig.value = config
   form.value = {
     username: config.username,
-    configContent: `user=${config.ociUserId || ''}\nfingerprint=${config.ociFingerprint || ''}\ntenancy=${config.ociTenantId || ''}\nregion=${config.ociRegion || ''}`
+    configContent: `user=${config.ociUserId || ''}\nfingerprint=${config.ociFingerprint || ''}\ntenancy=${config.ociTenantId || ''}\nregion=${config.ociRegion || ''}`,
+    proxyId: config.proxyId || ''
   }
+  await loadProxies()
   showAddModal.value = true
 }
 
@@ -274,6 +307,31 @@ const batchDeleteConfigs = async () => {
     await loadConfigs(currentPage.value)
   } catch (error: any) {
     toast.error(error.message || '批量删除失败')
+  }
+}
+
+// 批量设置代理
+const openBatchProxy = async () => {
+  batchProxyId.value = ''
+  await loadProxies()
+  showBatchProxyModal.value = true
+}
+const closeBatchProxyModal = () => {
+  showBatchProxyModal.value = false
+  batchProxyId.value = ''
+}
+const submitBatchProxy = async () => {
+  bindingProxy.value = true
+  try {
+    const response = await proxyApi.batchBind([...selectedConfigIds.value], batchProxyId.value)
+    toast.success(`已更新 ${response.data.updated} 个配置的代理`)
+    closeBatchProxyModal()
+    clearSelection()
+    await loadConfigs(currentPage.value)
+  } catch (error: any) {
+    toast.error(error.message || '设置代理失败')
+  } finally {
+    bindingProxy.value = false
   }
 }
 
@@ -399,6 +457,7 @@ const viewConfigDetails = (config: Config) => {
 
 onMounted(() => {
   loadConfigs()
+  loadProxies()
 })
 
 const headerRef = ref<HTMLElement>()
@@ -414,6 +473,10 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
         <Badge v-if="selectedConfigIds.length > 0" variant="secondary">已选择 {{ selectedConfigIds.length }} 项</Badge>
       </div>
       <div class="flex gap-2">
+        <Button v-if="selectedConfigIds.length > 0" variant="outline" @click="openBatchProxy">
+          <Network class="w-4 h-4" />
+          批量设置代理
+        </Button>
         <Button v-if="selectedConfigIds.length > 0" variant="success" @click="batchCreateInstance">
           <Plus class="w-4 h-4" />
           批量创建实例
@@ -422,7 +485,7 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
           <Trash2 class="w-4 h-4" />
           批量删除
         </Button>
-        <Button @click="showAddModal = true">
+        <Button @click="openAddModal">
           <Plus class="w-4 h-4" />
           添加配置
         </Button>
@@ -457,18 +520,19 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
               <TableHead>租户名称</TableHead>
               <TableHead class="hidden lg:table-cell">创建时间</TableHead>
               <TableHead>区域</TableHead>
+              <TableHead>代理</TableHead>
               <TableHead>实例</TableHead>
               <TableHead class="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-if="loading">
-              <TableCell colspan="7" class="h-32 text-center">
+              <TableCell colspan="8" class="h-32 text-center">
                 <Loader2 class="w-8 h-8 mx-auto animate-spin text-primary" />
               </TableCell>
             </TableRow>
             <TableRow v-else-if="!configs.length">
-              <TableCell colspan="7" class="h-32 text-center text-muted-foreground">暂无配置</TableCell>
+              <TableCell colspan="8" class="h-32 text-center text-muted-foreground">暂无配置</TableCell>
             </TableRow>
             <TableRow
               v-for="(config, index) in configs"
@@ -491,6 +555,10 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
               </TableCell>
               <TableCell>
                 <Badge variant="info">{{ config.ociRegion }}</Badge>
+              </TableCell>
+              <TableCell>
+                <Badge v-if="config.proxyName" variant="success">{{ config.proxyName }}</Badge>
+                <span v-else class="text-sm text-muted-foreground">直连</span>
               </TableCell>
               <TableCell>
                 <span>{{ config.instanceCount || 0 }}</span>
@@ -557,6 +625,22 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
           <Input v-model="form.username" placeholder="例: 我的OCI配置" required />
         </div>
         <div>
+          <label class="block text-sm font-medium mb-2">代理</label>
+          <Select v-model="form.proxyId">
+            <option value="">直连（不使用代理）</option>
+            <option v-for="proxy in proxies" :key="proxy.id" :value="proxy.id" :disabled="!proxy.enabled">
+              {{ proxy.name }}（{{ proxy.protocol.toUpperCase() }} {{ proxy.host }}:{{ proxy.port }}）{{
+                proxy.enabled ? '' : ' [已禁用]'
+              }}
+            </option>
+          </Select>
+          <p class="text-xs text-muted-foreground mt-1">
+            在
+            <RouterLink to="/proxies" class="text-primary hover:underline">代理管理</RouterLink>
+            中维护代理；直连时使用服务器出口 IP
+          </p>
+        </div>
+        <div>
           <label class="block text-sm font-medium mb-2">配置内容</label>
           <Textarea
             v-model="form.configContent"
@@ -604,6 +688,35 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
           <Button type="submit" :disabled="submitting">
             <Loader2 v-if="submitting" class="w-4 h-4 animate-spin" />
             {{ submitting ? '提交中...' : '提交' }}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
+
+    <!-- Batch Proxy Modal -->
+    <Dialog v-model:open="showBatchProxyModal">
+      <DialogHeader class="mb-4">
+        <DialogTitle>批量设置代理</DialogTitle>
+        <DialogDescription>为选中的 {{ selectedConfigIds.length }} 个配置统一指定代理</DialogDescription>
+      </DialogHeader>
+      <form class="space-y-4" @submit.prevent="submitBatchProxy">
+        <div>
+          <label class="block text-sm font-medium mb-2">代理</label>
+          <Select v-model="batchProxyId">
+            <option value="">直连（不使用代理）</option>
+            <option v-for="proxy in proxies" :key="proxy.id" :value="proxy.id" :disabled="!proxy.enabled">
+              {{ proxy.name }}（{{ proxy.protocol.toUpperCase() }} {{ proxy.host }}:{{ proxy.port }}）{{
+                proxy.enabled ? '' : ' [已禁用]'
+              }}
+            </option>
+          </Select>
+          <p class="text-xs text-muted-foreground mt-1">已绑定其他代理的配置将被覆盖；留空则改为直连</p>
+        </div>
+        <DialogFooter class="mt-6">
+          <Button type="button" variant="outline" @click="closeBatchProxyModal">取消</Button>
+          <Button type="submit" :disabled="bindingProxy">
+            <Loader2 v-if="bindingProxy" class="w-4 h-4 animate-spin" />
+            {{ bindingProxy ? '设置中...' : '确定' }}
           </Button>
         </DialogFooter>
       </form>

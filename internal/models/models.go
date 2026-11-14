@@ -16,6 +16,7 @@ type OciUser struct {
 	OciFingerprint   string     `gorm:"column:oci_fingerprint" json:"ociFingerprint"`
 	OciRegion        string     `gorm:"column:oci_region" json:"ociRegion"`
 	OciKeyPath       string     `gorm:"column:oci_key_path" json:"ociKeyPath"`
+	ProxyID          string     `gorm:"column:proxy_id;index" json:"proxyId"` // 空字符串表示直连
 	CreateTime       time.Time  `gorm:"column:create_time;autoCreateTime" json:"createTime"`
 }
 
@@ -27,6 +28,8 @@ type OciUserListResponse struct {
 	TenantCreateTime string `json:"tenantCreateTime"`
 	OciTenantID      string `json:"ociTenantId"`
 	OciRegion        string `json:"ociRegion"`
+	ProxyID          string `json:"proxyId"`
+	ProxyName        string `json:"proxyName"`
 	CreateTime       string `json:"createTime"`
 	InstanceCount    int    `json:"instanceCount"`
 	RunningInstances int    `json:"runningInstances"`
@@ -427,5 +430,40 @@ func AutoMigrate(db *gorm.DB) error {
 		&Bandwidth500Binding{},
 		&Bandwidth500Operation{},
 		&Bandwidth500Pool{},
+		&ProxyConfig{},
 	)
+}
+
+// ProxyConfig 代理配置（HTTP/HTTPS/SOCKS5），供 OCI 配置按需选用。
+type ProxyConfig struct {
+	ID         string    `gorm:"primaryKey;column:id" json:"id"`
+	Name       string    `gorm:"column:name;not null" json:"name"`
+	Protocol   string    `gorm:"column:protocol;not null" json:"protocol"` // http, https, socks5
+	Host       string    `gorm:"column:host;not null" json:"host"`
+	Port       int       `gorm:"column:port;not null" json:"port"`
+	Username   string    `gorm:"column:username" json:"username"`
+	Password   string    `gorm:"column:password" json:"-"`
+	Enabled    bool      `gorm:"column:enabled;default:true" json:"enabled"`
+	Remark     string    `gorm:"column:remark;type:text" json:"remark"`
+	CreateTime time.Time `gorm:"column:create_time;autoCreateTime" json:"createTime"`
+	UpdateTime time.Time `gorm:"column:update_time;autoUpdateTime" json:"updateTime"`
+}
+
+func (ProxyConfig) TableName() string {
+	return "proxy_config"
+}
+
+// ProxyConfigResponse 代理列表响应：不回传密码，只标记是否已配置凭据。
+type ProxyConfigResponse struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Protocol   string `json:"protocol"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	HasAuth    bool   `json:"hasAuth"`
+	Enabled    bool   `json:"enabled"`
+	Remark     string `json:"remark"`
+	BindCount  int64  `json:"bindCount"`
+	CreateTime string `json:"createTime"`
 }

@@ -11,6 +11,8 @@ export interface ConfigItem {
   ociFingerprint?: string
   ociTenantId?: string
   ociKeyPath?: string
+  proxyId?: string
+  proxyName?: string
   instanceCount?: number
   runningInstances?: number
 }
@@ -195,8 +197,10 @@ export const ociApi = {
     ociFingerprint: string
     ociRegion: string
     ociKeyPath: string
+    proxyId?: string
   }) => post('/oci/addCfg', req),
-  updateCfgName: (req: { id: string; username: string; ociKeyPath?: string }) => post('/oci/updateCfgName', req),
+  updateCfgName: (req: { id: string; username: string; ociKeyPath?: string; proxyId?: string }) =>
+    post('/oci/updateCfgName', req),
   removeCfg: (ids: string[]) => post('/oci/removeCfg', { ids }),
 
   details: (configId: string) => post<ConfigDetails>('/oci/details', { configId }),

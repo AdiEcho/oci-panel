@@ -153,6 +153,18 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			key.GET("/detail", keyCtrl.GetKeyByID)
 		}
 
+		proxyCtrl := controllers.NewProxyController(ociService)
+		proxy := api.Group("/proxy")
+		{
+			proxy.POST("/page", proxyCtrl.ProxyPage)
+			proxy.GET("/list", proxyCtrl.ProxyList)
+			proxy.POST("/create", proxyCtrl.CreateProxy)
+			proxy.POST("/update", proxyCtrl.UpdateProxy)
+			proxy.POST("/delete", proxyCtrl.DeleteProxy)
+			proxy.POST("/test", proxyCtrl.TestProxy)
+			proxy.POST("/batchBind", proxyCtrl.BatchBindProxy)
+		}
+
 		task := api.Group("/task")
 		{
 			task.POST("/create", taskCtrl.CreateTask)
