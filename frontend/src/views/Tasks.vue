@@ -278,6 +278,13 @@ onMounted(() => {
                 <div class="text-xs text-muted-foreground">
                   {{ task.ocpus }}核 / {{ task.memory }}GB / {{ task.disk }}GB
                 </div>
+                <div
+                  v-if="task.shape"
+                  class="text-[11px] font-mono text-muted-foreground truncate max-w-[220px]"
+                  :title="task.shape"
+                >
+                  {{ task.shape }}
+                </div>
               </TableCell>
               <TableCell>{{ task.interval }}秒</TableCell>
               <TableCell>

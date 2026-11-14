@@ -23,6 +23,7 @@ type CreatePresetRequest struct {
 	Disk            int     `json:"disk"`
 	BootVolumeVpu   int64   `json:"bootVolumeVpu"`
 	Architecture    string  `json:"architecture"`
+	Shape           string  `json:"shape"`
 	OperationSystem string  `json:"operationSystem"`
 	ImageID         string  `json:"imageId"`
 	SSHKeyID        string  `json:"sshKeyId"`
@@ -51,6 +52,9 @@ func (pc *PresetController) CreatePreset(c *gin.Context) {
 	if req.Architecture == "" {
 		req.Architecture = "ARM"
 	}
+	if req.Shape == "" {
+		req.Shape = defaultShapeForArchitecture(req.Architecture)
+	}
 	if req.OperationSystem == "" {
 		req.OperationSystem = "Ubuntu"
 	}
@@ -63,6 +67,7 @@ func (pc *PresetController) CreatePreset(c *gin.Context) {
 		Disk:            req.Disk,
 		BootVolumeVpu:   req.BootVolumeVpu,
 		Architecture:    req.Architecture,
+		Shape:           req.Shape,
 		OperationSystem: req.OperationSystem,
 		ImageID:         req.ImageID,
 		SSHKeyID:        req.SSHKeyID,
@@ -86,6 +91,7 @@ type UpdatePresetRequest struct {
 	Disk            int     `json:"disk"`
 	BootVolumeVpu   int64   `json:"bootVolumeVpu"`
 	Architecture    string  `json:"architecture"`
+	Shape           string  `json:"shape"`
 	OperationSystem string  `json:"operationSystem"`
 	ImageID         string  `json:"imageId"`
 	SSHKeyID        string  `json:"sshKeyId"`
@@ -105,6 +111,10 @@ func (pc *PresetController) UpdatePreset(c *gin.Context) {
 		return
 	}
 
+	if req.Shape == "" {
+		req.Shape = defaultShapeForArchitecture(req.Architecture)
+	}
+
 	updates := map[string]interface{}{
 		"name":             req.Name,
 		"ocpus":            req.Ocpus,
@@ -112,6 +122,7 @@ func (pc *PresetController) UpdatePreset(c *gin.Context) {
 		"disk":             req.Disk,
 		"boot_volume_vpu":  req.BootVolumeVpu,
 		"architecture":     req.Architecture,
+		"shape":            req.Shape,
 		"operation_system": req.OperationSystem,
 		"image_id":         req.ImageID,
 		"ssh_key_id":       req.SSHKeyID,
@@ -169,6 +180,7 @@ func (pc *PresetController) ListPresets(c *gin.Context) {
 			Disk:            p.Disk,
 			BootVolumeVpu:   p.BootVolumeVpu,
 			Architecture:    p.Architecture,
+			Shape:           p.Shape,
 			OperationSystem: p.OperationSystem,
 			ImageID:         p.ImageID,
 			SSHKeyID:        p.SSHKeyID,
@@ -208,6 +220,7 @@ func (pc *PresetController) GetPreset(c *gin.Context) {
 		Disk:            preset.Disk,
 		BootVolumeVpu:   preset.BootVolumeVpu,
 		Architecture:    preset.Architecture,
+		Shape:           preset.Shape,
 		OperationSystem: preset.OperationSystem,
 		ImageID:         preset.ImageID,
 		SSHKeyID:        preset.SSHKeyID,
@@ -217,4 +230,12 @@ func (pc *PresetController) GetPreset(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(resp, "success"))
+}
+
+// defaultShapeForArchitecture 为旧预设/未选择规格的请求提供向后兼容的默认规格。
+func defaultShapeForArchitecture(architecture string) string {
+	if architecture == "AMD" {
+		return "VM.Standard.E2.1.Micro"
+	}
+	return "VM.Standard.A1.Flex"
 }

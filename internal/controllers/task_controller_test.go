@@ -17,7 +17,7 @@ import (
 
 type successfulInstanceCreator struct{}
 
-func (successfulInstanceCreator) CreateInstance(context.Context, *models.OciUser, string, string, string, float64, float64, int, int64, string, string) error {
+func (successfulInstanceCreator) CreateInstance(context.Context, *models.OciUser, string, string, string, string, float64, float64, int, int64, string, string) error {
 	return nil
 }
 

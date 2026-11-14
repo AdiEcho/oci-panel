@@ -89,6 +89,7 @@ const instanceForm = ref({
   disk: 50,
   bootVolumeVpu: 10,
   architecture: 'ARM',
+  shape: '',
   operationSystem: 'Ubuntu',
   imageId: '',
   sshKeyId: '',
@@ -160,7 +161,7 @@ const loadPresets = async () => {
   }
 }
 
-const applyPreset = (presetId: string) => {
+const applyPreset = async (presetId: string) => {
   if (!presetId) return
   const preset = presets.value.find(p => p.id === presetId)
   if (preset) {
@@ -169,25 +170,34 @@ const applyPreset = (presetId: string) => {
     instanceForm.value.disk = preset.disk
     instanceForm.value.bootVolumeVpu = preset.bootVolumeVpu
     instanceForm.value.architecture = preset.architecture
+    instanceForm.value.shape =
+      preset.shape || (preset.architecture === 'AMD' ? 'VM.Standard.E2.1.Micro' : 'VM.Standard.A1.Flex')
     instanceForm.value.operationSystem = preset.operationSystem
-    if (preset.imageId) {
-      instanceForm.value.imageId = preset.imageId
-    }
     if (preset.sshKeyId) {
       instanceForm.value.sshKeyId = preset.sshKeyId
     }
     if (selectedConfigForInstance.value) {
-      loadImages(selectedConfigForInstance.value.id, instanceForm.value.ociRegion, preset.architecture)
+      await loadImages(
+        selectedConfigForInstance.value.id,
+        instanceForm.value.ociRegion,
+        preset.architecture,
+        instanceForm.value.shape
+      )
+      if (preset.imageId && filteredImages.value.some(img => img.id === preset.imageId)) {
+        instanceForm.value.imageId = preset.imageId
+      }
+    } else if (preset.imageId) {
+      instanceForm.value.imageId = preset.imageId
     }
     toast.success(`已应用预设: ${preset.name}`)
   }
 }
 
-const loadImages = async (configId: string, region: string, architecture: string) => {
+const loadImages = async (configId: string, region: string, architecture: string, shape?: string) => {
   if (!configId || !region || !architecture) return
   loadingImages.value = true
   try {
-    const response = await ociApi.images({ configId, region, architecture })
+    const response = await ociApi.images({ configId, region, architecture, shape: shape || undefined })
     availableImages.value = response.data || []
     filterImagesByOS()
   } catch {
@@ -341,6 +351,7 @@ const createInstance = async (config: Config) => {
   instanceForm.value.ociRegion = config.ociRegion
   selectedPresetId.value = ''
   await Promise.all([loadSSHKeys(), loadPresets()])
+  instanceForm.value.shape = ''
   await loadImages(config.id, config.ociRegion, instanceForm.value.architecture)
   showCreateInstanceModal.value = true
 }
@@ -351,6 +362,8 @@ const closeInstanceModal = () => {
   filteredImages.value = []
 }
 const onArchitectureChange = () => {
+  // 手动切换架构后旧规格不再适用，回到该架构的默认免费规格。
+  instanceForm.value.shape = ''
   if (selectedConfigForInstance.value)
     loadImages(selectedConfigForInstance.value.id, instanceForm.value.ociRegion, instanceForm.value.architecture)
 }
@@ -378,6 +391,7 @@ const submitInstanceTask = async () => {
       disk: instanceForm.value.disk,
       bootVolumeVpu: instanceForm.value.bootVolumeVpu,
       architecture: instanceForm.value.architecture,
+      shape: instanceForm.value.shape || undefined,
       operationSystem: instanceForm.value.operationSystem,
       imageId: instanceForm.value.imageId || undefined,
       sshKeyId: instanceForm.value.sshKeyId,
@@ -400,6 +414,7 @@ const batchCreateInstance = async () => {
     return
   }
   selectedPresetId.value = ''
+  instanceForm.value.shape = ''
   await Promise.all([loadSSHKeys(), loadPresets()])
   showBatchCreateModal.value = true
 }
@@ -426,6 +441,7 @@ const submitBatchInstanceTask = async () => {
           memory: instanceForm.value.memory,
           disk: instanceForm.value.disk,
           architecture: instanceForm.value.architecture,
+          shape: instanceForm.value.shape || undefined,
           operationSystem: instanceForm.value.operationSystem,
           sshKeyId: instanceForm.value.sshKeyId,
           interval: instanceForm.value.interval || 60
@@ -793,6 +809,10 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
             </select>
           </div>
         </div>
+        <p v-if="instanceForm.shape" class="text-xs text-muted-foreground">
+          规格:
+          <span class="font-mono">{{ instanceForm.shape }}</span>
+        </p>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium mb-2">操作系统</label>
@@ -901,12 +921,17 @@ useMotion(headerRef, { initial: { opacity: 0, y: -20 }, enter: { opacity: 1, y: 
             <select
               v-model="instanceForm.architecture"
               class="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              @change="instanceForm.shape = ''"
             >
               <option value="ARM">ARM</option>
               <option value="AMD">AMD</option>
             </select>
           </div>
         </div>
+        <p v-if="instanceForm.shape" class="text-xs text-muted-foreground">
+          规格:
+          <span class="font-mono">{{ instanceForm.shape }}</span>
+        </p>
         <div>
           <label class="block text-sm font-medium mb-2">操作系统</label>
           <select

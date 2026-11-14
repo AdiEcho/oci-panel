@@ -34,7 +34,7 @@ func extractOCIErrorMessage(err error) string {
 }
 
 type instanceCreator interface {
-	CreateInstance(context.Context, *models.OciUser, string, string, string, float64, float64, int, int64, string, string) error
+	CreateInstance(context.Context, *models.OciUser, string, string, string, string, float64, float64, int, int64, string, string) error
 }
 
 type taskExecution struct {
@@ -211,7 +211,7 @@ func (s *TaskService) createInstance(ctx context.Context, task models.OciCreateT
 	if err := ctx.Err(); err != nil {
 		return err, false
 	}
-	return s.ociService.CreateInstance(ctx, &user, task.OciRegion, task.Architecture, task.OperationSystem,
+	return s.ociService.CreateInstance(ctx, &user, task.OciRegion, task.Shape, task.Architecture, task.OperationSystem,
 		task.Ocpus, task.Memory, task.Disk, task.BootVolumeVpu, sshKey.PublicKey, task.ImageId), false
 }
 

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,14 +135,17 @@ func (s *OCIService) LaunchInstance(ctx context.Context, user *models.OciUser, p
 			CreateVnicDetails: &core.CreateVnicDetails{
 				SubnetId: &params.SubnetId,
 			},
-			ShapeConfig: &core.LaunchInstanceShapeConfigDetails{
-				Ocpus:       &params.Ocpus,
-				MemoryInGBs: &params.MemoryInGBs,
-			},
 			Metadata: map[string]string{
 				"ssh_authorized_keys": params.SshPublicKey,
 			},
 		},
+	}
+	// 固定规格不接受自定义 CPU/内存；仅在 Flex 规格下下发 ShapeConfig。
+	if params.Ocpus > 0 && params.MemoryInGBs > 0 {
+		req.LaunchInstanceDetails.ShapeConfig = &core.LaunchInstanceShapeConfigDetails{
+			Ocpus:       &params.Ocpus,
+			MemoryInGBs: &params.MemoryInGBs,
+		}
 	}
 
 	resp, err := client.LaunchInstance(ctx, req)
@@ -153,7 +157,7 @@ func (s *OCIService) LaunchInstance(ctx context.Context, user *models.OciUser, p
 }
 
 // CreateInstance creates an instance with auto VCN/subnet setup. Uses region-specific clients for thread safety.
-func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, region, architecture, operationSystem string, ocpus, memory float64, disk int, vpusPerGB int64, sshPublicKey string, imageIdParam string) error {
+func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, region, shape, architecture, operationSystem string, ocpus, memory float64, disk int, vpusPerGB int64, sshPublicKey string, imageIdParam string) error {
 	compartmentId := user.OciTenantID
 
 	identityClient, err := s.GetIdentityClientForRegion(user, region)
@@ -339,9 +343,23 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		subnetId = *createSubnetResp.Id
 	}
 
-	shape := "VM.Standard.A1.Flex"
-	if architecture == "AMD" {
-		shape = "VM.Standard.E2.1.Micro"
+	resolvedShape := shape
+	if resolvedShape == "" {
+		resolvedShape = "VM.Standard.A1.Flex"
+		if architecture == "AMD" {
+			resolvedShape = "VM.Standard.E2.1.Micro"
+		}
+	}
+	if architecture == "" {
+		if strings.Contains(resolvedShape, ".A1.") || strings.Contains(resolvedShape, ".A2.") || strings.Contains(resolvedShape, ".A3.") {
+			architecture = "ARM"
+		} else {
+			architecture = "AMD"
+		}
+	}
+	if !strings.Contains(resolvedShape, ".Flex") {
+		// 固定规格不支持自定义 CPU/内存，交给 OCI 使用规格默认值
+		ocpus, memory = 0, 0
 	}
 
 	var imageId string
@@ -363,7 +381,7 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		imageResp, err := computeClient.ListImages(ctx, core.ListImagesRequest{
 			CompartmentId:   &compartmentId,
 			OperatingSystem: &osName,
-			Shape:           &shape,
+			Shape:           &resolvedShape,
 			SortBy:          core.ListImagesSortByTimecreated,
 			SortOrder:       core.ListImagesSortOrderDesc,
 		})
@@ -383,7 +401,7 @@ func (s *OCIService) CreateInstance(ctx context.Context, user *models.OciUser, r
 		AvailabilityDomain: availabilityDomain,
 		DisplayName:        displayName,
 		ImageId:            imageId,
-		Shape:              shape,
+		Shape:              resolvedShape,
 		SubnetId:           subnetId,
 		Ocpus:              float32(ocpus),
 		MemoryInGBs:        float32(memory),

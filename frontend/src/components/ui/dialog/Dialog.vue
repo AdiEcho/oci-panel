@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 
 interface Props {
   open?: boolean
+  size?: 'default' | 'wide' | 'xl'
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  open: false
+  open: false,
+  size: 'default'
 })
+
+const widthClass = computed(
+  () =>
+    ({
+      default: 'max-w-lg',
+      wide: 'max-w-3xl',
+      xl: 'max-w-5xl'
+    })[props.size]
+)
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -47,7 +58,10 @@ watch(
         >
           <div
             v-if="open"
-            class="relative z-50 w-full max-w-lg max-h-[90vh] overflow-auto rounded-lg border bg-card p-6 shadow-lg animate-in fade-in slide-in-from-bottom"
+            :class="[
+              'relative z-50 w-full max-h-[90vh] overflow-auto rounded-lg border bg-card p-6 shadow-lg animate-in fade-in slide-in-from-bottom',
+              widthClass
+            ]"
           >
             <slot />
           </div>

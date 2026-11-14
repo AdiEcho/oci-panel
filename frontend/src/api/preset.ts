@@ -10,6 +10,7 @@ export interface Preset {
   disk: number
   bootVolumeVpu: number
   architecture: string
+  shape: string
   operationSystem: string
   imageId: string
   sshKeyId: string
@@ -26,6 +27,7 @@ export interface PresetForm {
   disk: number
   bootVolumeVpu: number
   architecture: string
+  shape: string
   operationSystem: string
   imageId: string
   sshKeyId: string

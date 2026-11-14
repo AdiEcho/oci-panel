@@ -6,6 +6,7 @@ export interface TaskItem {
   username: string
   ociRegion: string
   architecture: string
+  shape: string
   operationSystem: string
   ocpus: number
   memory: number
@@ -35,6 +36,7 @@ export interface CreateTaskReq {
   disk: number
   bootVolumeVpu?: number
   architecture: string
+  shape?: string
   operationSystem: string
   imageId?: string
   sshKeyId: string

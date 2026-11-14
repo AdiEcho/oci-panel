@@ -18,7 +18,8 @@ import (
 type ListImagesRequest struct {
 	ConfigID     string `json:"configId" binding:"required"`
 	Region       string `json:"region" binding:"required"`
-	Architecture string `json:"architecture" binding:"required"`
+	Architecture string `json:"architecture"`
+	Shape        string `json:"shape"`
 	ClearCache   bool   `json:"clearCache"`
 }
 
@@ -37,11 +38,14 @@ func (oc *OciController) ListImages(c *gin.Context) {
 	db := database.GetDB()
 
 	cacheKey := req.Region + "_" + req.Architecture
+	if req.Shape != "" {
+		cacheKey = req.Region + "_" + req.Shape
+	}
 
 	// 尝试从缓存获取
 	if !req.ClearCache {
 		var cache models.OciImageCache
-		if err := db.Where("region = ? AND architecture = ?", req.Region, req.Architecture).First(&cache).Error; err == nil {
+		if err := db.Where("region = ? AND architecture = ? AND shape = ?", req.Region, req.Architecture, req.Shape).First(&cache).Error; err == nil {
 			if cache.ImagesData != "" {
 				var images []services.ImageInfo
 				if json.Unmarshal([]byte(cache.ImagesData), &images) == nil {
@@ -53,7 +57,7 @@ func (oc *OciController) ListImages(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	images, err := oc.ociService.ListImages(ctx, &user, req.Region, req.Architecture)
+	images, err := oc.ociService.ListImages(ctx, &user, req.Region, req.Architecture, req.Shape)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(500, err.Error()))
 		return
@@ -62,12 +66,13 @@ func (oc *OciController) ListImages(c *gin.Context) {
 	// 保存到缓存
 	imagesJson, _ := json.Marshal(images)
 	var cache models.OciImageCache
-	result := db.Where("region = ? AND architecture = ?", req.Region, req.Architecture).First(&cache)
+	result := db.Where("region = ? AND architecture = ? AND shape = ?", req.Region, req.Architecture, req.Shape).First(&cache)
 	if result.Error != nil {
 		cache = models.OciImageCache{
 			ID:           cacheKey,
 			Region:       req.Region,
 			Architecture: req.Architecture,
+			Shape:        req.Shape,
 		}
 	}
 	cache.ImagesData = string(imagesJson)

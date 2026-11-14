@@ -18,8 +18,9 @@ type ImageInfo struct {
 	TimeCreated            string `json:"timeCreated"`
 }
 
-// ListImages 获取可用镜像列表
-func (s *OCIService) ListImages(ctx context.Context, user *models.OciUser, region, architecture string) ([]ImageInfo, error) {
+// ListImages 获取可用镜像列表。shape 非空时优先按规格过滤（Flex 与非 Flex 镜像集合不同），
+// 否则回退到按架构映射的默认免费规格。
+func (s *OCIService) ListImages(ctx context.Context, user *models.OciUser, region, architecture, shape string) ([]ImageInfo, error) {
 	computeClient, err := s.GetComputeClientForRegion(user, region)
 	if err != nil {
 		return nil, fmt.Errorf("获取计算客户端失败: %w", err)
@@ -28,16 +29,19 @@ func (s *OCIService) ListImages(ctx context.Context, user *models.OciUser, regio
 	compartmentId := user.OciTenantID
 
 	// 确定Shape
-	shape := "VM.Standard.A1.Flex"
-	if architecture == "AMD" {
-		shape = "VM.Standard.E2.1.Micro"
+	resolvedShape := shape
+	if resolvedShape == "" {
+		resolvedShape = "VM.Standard.A1.Flex"
+		if architecture == "AMD" {
+			resolvedShape = "VM.Standard.E2.1.Micro"
+		}
 	}
 
 	// 全量分页：镜像可能有数百条，此前只取首页会截断。
 	imgItems, err := paginate(func(page *string) ([]core.Image, *string, error) {
 		resp, err := computeClient.ListImages(ctx, core.ListImagesRequest{
 			CompartmentId: &compartmentId,
-			Shape:         &shape,
+			Shape:         &resolvedShape,
 			SortBy:        core.ListImagesSortByTimecreated,
 			SortOrder:     core.ListImagesSortOrderDesc,
 			Page:          page,

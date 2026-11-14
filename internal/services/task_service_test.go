@@ -18,7 +18,7 @@ import (
 
 type fakeInstanceCreator struct{ create func(context.Context) error }
 
-func (f fakeInstanceCreator) CreateInstance(ctx context.Context, _ *models.OciUser, _, _, _ string, _, _ float64, _ int, _ int64, _, _ string) error {
+func (f fakeInstanceCreator) CreateInstance(ctx context.Context, _ *models.OciUser, _, _, _, _ string, _, _ float64, _ int, _ int64, _, _ string) error {
 	return f.create(ctx)
 }
 

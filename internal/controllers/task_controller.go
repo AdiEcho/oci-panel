@@ -30,6 +30,7 @@ type CreateTaskRequest struct {
 	Disk            int     `json:"disk"`
 	BootVolumeVpu   int64   `json:"bootVolumeVpu"`
 	Architecture    string  `json:"architecture"`
+	Shape           string  `json:"shape"`
 	OperationSystem string  `json:"operationSystem"`
 	ImageId         string  `json:"imageId"`
 	SSHKeyID        string  `json:"sshKeyId" binding:"required"`
@@ -74,6 +75,13 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 	if req.Architecture == "" {
 		req.Architecture = "ARM"
 	}
+	if req.Shape == "" {
+		if req.Architecture == "AMD" {
+			req.Shape = "VM.Standard.E2.1.Micro"
+		} else {
+			req.Shape = "VM.Standard.A1.Flex"
+		}
+	}
 	if req.OperationSystem == "" {
 		req.OperationSystem = "Ubuntu"
 	}
@@ -94,6 +102,7 @@ func (tc *TaskController) CreateTask(c *gin.Context) {
 		Disk:            req.Disk,
 		BootVolumeVpu:   req.BootVolumeVpu,
 		Architecture:    req.Architecture,
+		Shape:           req.Shape,
 		OperationSystem: req.OperationSystem,
 		ImageId:         req.ImageId,
 		SSHKeyID:        req.SSHKeyID,
@@ -178,6 +187,7 @@ func (tc *TaskController) TaskList(c *gin.Context) {
 			Memory:          t.Memory,
 			Disk:            t.Disk,
 			Architecture:    t.Architecture,
+			Shape:           t.Shape,
 			Interval:        t.Interval,
 			OperationSystem: t.OperationSystem,
 			Status:          t.Status,

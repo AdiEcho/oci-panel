@@ -143,6 +143,41 @@ export interface TenantInfo {
   [key: string]: unknown
 }
 
+/** 规格按需单价（USD/小时），由前端按 CPU/内存估算。 */
+export interface ShapePrice {
+  currency: string
+  ocpuHourly: number
+  memoryGbHourly: number
+  gpuHourly: number
+  nvmeTbHourly: number
+  billedBy: string
+  source: string
+  updatedAt: string
+}
+
+/** 可创建实例的规格（对齐 Oracle 控制台规格卡片）。 */
+export interface ShapeInfo {
+  shape: string
+  architecture: string
+  processorDescription: string
+  ocpus: number
+  memoryInGBs: number
+  networkBandwidthInGbps: number
+  isFlex: boolean
+  minOcpus: number
+  maxOcpus: number
+  minMemoryInGBs: number
+  maxMemoryInGBs: number
+  localDisks: number
+  localDiskSizeInGBs: number
+  gpus: number
+  gpuDescription: string
+  freeTier: boolean
+  freeTierMaxOcpus: number
+  freeTierMaxMemoryInGBs: number
+  price?: ShapePrice
+}
+
 /** 可用镜像。 */
 export interface ImageInfo {
   id: string
@@ -218,7 +253,9 @@ export const ociApi = {
   deleteApiKey: (req: { ociCfgId: string; userId: string }) => post('/oci/tenant/deleteApiKey', req),
   deleteUser: (req: { ociCfgId: string; userId: string }) => post('/oci/tenant/deleteUser', req),
 
-  images: (req: { configId: string; region: string; architecture: string }) => post<ImageInfo[]>('/oci/images', req),
+  images: (req: { configId: string; region: string; architecture: string; shape?: string }) =>
+    post<ImageInfo[]>('/oci/images', req),
+  shapes: (req: { configId: string; region: string; clearCache?: boolean }) => post<ShapeInfo[]>('/oci/shapes', req),
 
   trafficCondition: (configId: string) => get<TrafficCondition>('/oci/traffic/condition', { params: { configId } }),
   trafficVnics: (req: { configId: string; instanceId: string }) =>

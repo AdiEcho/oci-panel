@@ -193,6 +193,7 @@ type OciCreateTask struct {
 	Disk            int        `gorm:"column:disk;default:50" json:"disk"`
 	BootVolumeVpu   int64      `gorm:"column:boot_volume_vpu;default:10" json:"bootVolumeVpu"`
 	Architecture    string     `gorm:"column:architecture;default:ARM" json:"architecture"`
+	Shape           string     `gorm:"column:shape;not null;default:''" json:"shape"`
 	Interval        int        `gorm:"column:interval;default:60" json:"interval"`
 	CreateNumbers   int        `gorm:"column:create_numbers;default:1" json:"createNumbers"`
 	SSHKeyID        string     `gorm:"column:ssh_key_id" json:"sshKeyId"`
@@ -233,6 +234,7 @@ type TaskListResponse struct {
 	Memory          float64 `json:"memory"`
 	Disk            int     `json:"disk"`
 	Architecture    string  `json:"architecture"`
+	Shape           string  `json:"shape"`
 	Interval        int     `json:"interval"`
 	OperationSystem string  `json:"operationSystem"`
 	Status          string  `json:"status"`
@@ -318,12 +320,25 @@ type OciImageCache struct {
 	ID           string    `gorm:"primaryKey;column:id" json:"id"`
 	Region       string    `gorm:"column:region;not null" json:"region"`
 	Architecture string    `gorm:"column:architecture;not null" json:"architecture"`
+	Shape        string    `gorm:"column:shape;not null;default:''" json:"shape"`
 	ImagesData   string    `gorm:"column:images_data;type:text" json:"imagesData"`
 	UpdateTime   time.Time `gorm:"column:update_time" json:"updateTime"`
 }
 
 func (OciImageCache) TableName() string {
 	return "oci_image_cache"
+}
+
+// OciShapeCache 实例规格缓存表（按区域 + 租户维度）
+type OciShapeCache struct {
+	ID         string    `gorm:"primaryKey;column:id" json:"id"`
+	Region     string    `gorm:"column:region;not null" json:"region"`
+	ShapesData string    `gorm:"column:shapes_data;type:text" json:"shapesData"`
+	UpdateTime time.Time `gorm:"column:update_time" json:"updateTime"`
+}
+
+func (OciShapeCache) TableName() string {
+	return "oci_shape_cache"
 }
 
 // SSHKey SSH密钥表
@@ -361,6 +376,7 @@ type InstancePreset struct {
 	Disk            int       `gorm:"column:disk;default:50" json:"disk"`
 	BootVolumeVpu   int64     `gorm:"column:boot_volume_vpu;default:10" json:"bootVolumeVpu"`
 	Architecture    string    `gorm:"column:architecture;default:ARM" json:"architecture"`
+	Shape           string    `gorm:"column:shape;not null;default:''" json:"shape"`
 	OperationSystem string    `gorm:"column:operation_system;default:Ubuntu" json:"operationSystem"`
 	ImageID         string    `gorm:"column:image_id" json:"imageId"`
 	SSHKeyID        string    `gorm:"column:ssh_key_id" json:"sshKeyId"`
@@ -381,6 +397,7 @@ type InstancePresetResponse struct {
 	Disk            int     `json:"disk"`
 	BootVolumeVpu   int64   `json:"bootVolumeVpu"`
 	Architecture    string  `json:"architecture"`
+	Shape           string  `json:"shape"`
 	OperationSystem string  `json:"operationSystem"`
 	ImageID         string  `json:"imageId"`
 	SSHKeyID        string  `json:"sshKeyId"`
@@ -424,6 +441,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&SysSetting{},
 		&OciConfigCache{},
 		&OciImageCache{},
+		&OciShapeCache{},
 		&SSHKey{},
 		&InstancePreset{},
 		&Bandwidth500Resource{},

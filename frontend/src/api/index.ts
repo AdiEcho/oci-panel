@@ -47,6 +47,7 @@ export type {
   VCNInfo,
   TenantInfo,
   ImageInfo,
+  ShapeInfo,
   TrafficCondition,
   TrafficData,
   SecurityListData,

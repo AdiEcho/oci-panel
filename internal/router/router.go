@@ -104,6 +104,7 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			oci.POST("/vcn/delete", ociCtrl.DeleteVcn)
 			oci.POST("/vcn/create", ociCtrl.CreateVcn)
 			oci.POST("/images", ociCtrl.ListImages)
+			oci.POST("/shapes", ociCtrl.ListShapes)
 		}
 
 		instanceCtrl := controllers.NewInstanceController(instanceService, wsService)
