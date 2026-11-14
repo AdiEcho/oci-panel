@@ -10,18 +10,21 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Upload,
   CheckCircle2,
   XCircle
 } from '@lucide/vue'
-import { proxyApi, type ProxyItem, type ProxyTestResult } from '@/api'
+import { proxyApi, type ProxyItem, type ProxyTestResult, type ProxyImportResult } from '@/api'
 import { toast } from '@/composables/useToast'
 import { usePagination } from '@/composables/usePagination'
+import { useSelection } from '@/composables/useSelection'
 import { debounce } from '@/lib/utils'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -32,6 +35,13 @@ const loading = ref(false)
 const searchText = ref('')
 const filterProtocol = ref('')
 const { currentPage, pageSize, totalPages, applyResult } = usePagination()
+const {
+  selectedIds,
+  isAllSelected,
+  isIndeterminate,
+  toggle: toggleSelect,
+  toggleAll: toggleSelectAll
+} = useSelection(proxies, p => p.id)
 
 const showEditModal = ref(false)
 const editingProxy = ref<ProxyItem | null>(null)
@@ -39,6 +49,12 @@ const submitting = ref(false)
 const testing = ref(false)
 const testResult = ref<ProxyTestResult | null>(null)
 const testingId = ref('')
+const batchTesting = ref(false)
+const probeResults = ref<Record<string, ProxyTestResult>>({})
+const showImportModal = ref(false)
+const importText = ref('')
+const importResult = ref<ProxyImportResult | null>(null)
+const importing = ref(false)
 
 const form = ref({
   name: '',
@@ -182,6 +198,7 @@ const testSaved = async (proxy: ProxyItem) => {
   testingId.value = proxy.id
   try {
     const response = await proxyApi.test({ id: proxy.id })
+    probeResults.value[proxy.id] = response.data
     if (response.data.reachable) {
       toast.success(`${proxy.name} 连接成功，延迟 ${response.data.latencyMs}ms`)
     } else {
@@ -191,6 +208,60 @@ const testSaved = async (proxy: ProxyItem) => {
     toast.error(error.message || '测试失败')
   } finally {
     testingId.value = ''
+  }
+}
+
+const runBatchTest = async () => {
+  const targets = selectedIds.value.length ? [...selectedIds.value] : proxies.value.map(proxy => proxy.id)
+  if (!targets.length) {
+    toast.warning('当前没有可探测的代理')
+    return
+  }
+  batchTesting.value = true
+  try {
+    const response = await proxyApi.batchTest(targets)
+    let reachable = 0
+    for (const item of response.data) {
+      probeResults.value[item.id] = item.result
+      if (item.result.reachable) reachable++
+    }
+    if (reachable === response.data.length) {
+      toast.success(`探测完成：${reachable}/${response.data.length} 个代理可用`)
+    } else {
+      toast.warning(`探测完成：${reachable}/${response.data.length} 个代理可用`)
+    }
+  } catch (error: any) {
+    toast.error(error.message || '批量探测失败')
+  } finally {
+    batchTesting.value = false
+  }
+}
+
+const openImport = () => {
+  importText.value = ''
+  importResult.value = null
+  showImportModal.value = true
+}
+
+const submitImport = async () => {
+  if (!importText.value.trim()) {
+    toast.warning('请粘贴代理列表')
+    return
+  }
+  importing.value = true
+  try {
+    const response = await proxyApi.importText(importText.value)
+    importResult.value = response.data
+    if (response.data.imported > 0) {
+      toast.success(`成功导入 ${response.data.imported} 个代理`)
+      await loadProxies(1)
+    } else {
+      toast.warning('没有新增代理，请检查重复或格式')
+    }
+  } catch (error: any) {
+    toast.error(error.message || '导入失败')
+  } finally {
+    importing.value = false
   }
 }
 
@@ -224,10 +295,21 @@ onMounted(() => {
         <h1 class="text-3xl font-display font-bold">代理管理</h1>
         <Badge variant="secondary">{{ proxies.length }} 个</Badge>
       </div>
-      <Button @click="openCreate">
-        <Plus class="w-4 h-4" />
-        添加代理
-      </Button>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button variant="outline" :disabled="batchTesting || !proxies.length" @click="runBatchTest">
+          <Loader2 v-if="batchTesting" class="w-4 h-4 animate-spin" />
+          <Zap v-else class="w-4 h-4" />
+          {{ batchTesting ? '探测中...' : '批量探测' }}
+        </Button>
+        <Button variant="outline" @click="openImport">
+          <Upload class="w-4 h-4" />
+          批量导入
+        </Button>
+        <Button @click="openCreate">
+          <Plus class="w-4 h-4" />
+          添加代理
+        </Button>
+      </div>
     </div>
 
     <Card
@@ -255,23 +337,31 @@ onMounted(() => {
         <Table>
           <TableHeader>
             <TableRow class="hover:bg-transparent">
+              <TableHead class="w-12">
+                <Checkbox
+                  :model-value="isAllSelected"
+                  :indeterminate="isIndeterminate"
+                  @update:model-value="toggleSelectAll"
+                />
+              </TableHead>
               <TableHead>名称</TableHead>
               <TableHead>协议</TableHead>
               <TableHead>地址</TableHead>
               <TableHead>认证</TableHead>
               <TableHead>绑定配置</TableHead>
               <TableHead>状态</TableHead>
+              <TableHead>探测</TableHead>
               <TableHead class="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-if="loading">
-              <TableCell colspan="7" class="h-32 text-center">
+              <TableCell colspan="9" class="h-32 text-center">
                 <Loader2 class="w-8 h-8 mx-auto animate-spin text-primary" />
               </TableCell>
             </TableRow>
             <TableRow v-else-if="!proxies.length">
-              <TableCell colspan="7" class="h-32 text-center text-muted-foreground">
+              <TableCell colspan="9" class="h-32 text-center text-muted-foreground">
                 暂无代理，点击右上角添加 HTTP 或 SOCKS5 代理
               </TableCell>
             </TableRow>
@@ -284,6 +374,9 @@ onMounted(() => {
               :enter="{ opacity: 1, x: 0, transition: { delay: 50 * index } }"
               class="group"
             >
+              <TableCell>
+                <Checkbox :model-value="selectedIds.includes(proxy.id)" @update:model-value="toggleSelect(proxy.id)" />
+              </TableCell>
               <TableCell class="font-medium">
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
@@ -311,6 +404,16 @@ onMounted(() => {
                 <Badge :variant="proxy.enabled ? 'success' : 'secondary'">
                   {{ proxy.enabled ? '启用' : '禁用' }}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  v-if="probeResults[proxy.id]"
+                  :variant="probeResults[proxy.id].reachable ? 'success' : 'destructive'"
+                  :title="probeResults[proxy.id].message"
+                >
+                  {{ probeResults[proxy.id].reachable ? `${probeResults[proxy.id].latencyMs}ms` : '失败' }}
+                </Badge>
+                <span v-else class="text-xs text-muted-foreground">-</span>
               </TableCell>
               <TableCell class="text-right">
                 <div class="flex justify-end items-center gap-1">
@@ -355,6 +458,52 @@ onMounted(() => {
         </div>
       </CardContent>
     </Card>
+
+    <!-- Import Modal -->
+    <Dialog v-model:open="showImportModal">
+      <DialogHeader class="mb-4">
+        <DialogTitle>批量导入代理</DialogTitle>
+        <DialogDescription>每行一个代理，重复代理自动跳过，格式错误会按行提示</DialogDescription>
+      </DialogHeader>
+
+      <form class="space-y-4" @submit.prevent="submitImport">
+        <div>
+          <label class="block text-sm font-medium mb-2">代理列表</label>
+          <Textarea
+            v-model="importText"
+            :rows="8"
+            class="font-mono text-sm"
+            placeholder="1.2.3.4:8080&#10;5.6.7.8:1080:user:pass&#10;socks5://user:pass@9.9.9.9:1080#新加坡&#10;https://proxy.example.com:8443"
+            required
+          />
+          <div class="text-xs text-muted-foreground mt-2 space-y-1">
+            <p>支持 host:port、host:port:user:pass、http/https/socks5 URL 三种写法</p>
+            <p>行尾 #名称 可指定代理名称；# 开头的整行视为注释</p>
+          </div>
+        </div>
+
+        <div v-if="importResult" class="rounded-md border border-border/60 p-3 text-sm space-y-2">
+          <div class="flex flex-wrap gap-4">
+            <span class="text-success">导入 {{ importResult.imported }}</span>
+            <span class="text-muted-foreground">跳过 {{ importResult.skipped }}</span>
+            <span :class="importResult.failed ? 'text-destructive' : 'text-muted-foreground'">
+              失败 {{ importResult.failed }}
+            </span>
+          </div>
+          <ul v-if="importResult.errors.length" class="text-xs text-destructive space-y-1 max-h-32 overflow-y-auto">
+            <li v-for="(error, index) in importResult.errors" :key="index">{{ error }}</li>
+          </ul>
+        </div>
+
+        <DialogFooter class="mt-6">
+          <Button type="button" variant="outline" @click="showImportModal = false">关闭</Button>
+          <Button type="submit" :disabled="importing">
+            <Loader2 v-if="importing" class="w-4 h-4 animate-spin" />
+            {{ importing ? '导入中...' : '开始导入' }}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
 
     <!-- Add/Edit Modal -->
     <Dialog v-model:open="showEditModal">

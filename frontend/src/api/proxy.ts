@@ -54,6 +54,19 @@ export interface ProxyTestResult {
   message: string
 }
 
+export interface ProxyImportResult {
+  imported: number
+  skipped: number
+  failed: number
+  errors: string[]
+}
+
+export interface ProxyBatchTestItem {
+  id: string
+  name: string
+  result: ProxyTestResult
+}
+
 export const proxyApi = {
   page: (req: ProxyListReq) => post<PageResult<ProxyItem>>('/proxy/page', req),
   list: () => get<ProxyItem[]>('/proxy/list'),
@@ -62,5 +75,7 @@ export const proxyApi = {
   delete: (ids: string[]) => post('/proxy/delete', { ids }),
   test: (req: ProxyTestReq) => post<ProxyTestResult>('/proxy/test', req),
   batchBind: (configIds: string[], proxyId: string) =>
-    post<{ updated: number }>('/proxy/batchBind', { configIds, proxyId })
+    post<{ updated: number }>('/proxy/batchBind', { configIds, proxyId }),
+  importText: (text: string) => post<ProxyImportResult>('/proxy/import', { text }),
+  batchTest: (ids: string[]) => post<ProxyBatchTestItem[]>('/proxy/batchTest', { ids })
 }

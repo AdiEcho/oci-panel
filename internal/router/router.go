@@ -162,7 +162,9 @@ func Setup(r *gin.Engine, cfg *config.Config) *Services {
 			proxy.POST("/update", proxyCtrl.UpdateProxy)
 			proxy.POST("/delete", proxyCtrl.DeleteProxy)
 			proxy.POST("/test", proxyCtrl.TestProxy)
+			proxy.POST("/batchTest", proxyCtrl.BatchTestProxy)
 			proxy.POST("/batchBind", proxyCtrl.BatchBindProxy)
+			proxy.POST("/import", proxyCtrl.ImportProxies)
 		}
 
 		task := api.Group("/task")
