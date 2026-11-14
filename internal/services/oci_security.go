@@ -131,6 +131,15 @@ func getProtocolName(protocol string) string {
 	}
 }
 
+// normalizeAllPortsProtocol 将 1-65535 全端口的 TCP/UDP 规则视为所有协议，
+// 避免「放开所有端口」只放行 TCP 而拦下 UDP/ICMP。
+func normalizeAllPortsProtocol(protocol string, portMin, portMax int) string {
+	if (protocol == "6" || protocol == "17") && portMin <= 1 && portMax >= 65535 {
+		return "all"
+	}
+	return protocol
+}
+
 // AddSecurityRule 添加安全规则
 func (s *OCIService) AddSecurityRule(ctx context.Context, user *models.OciUser, vcnId string, rule *models.SecurityRule, isIngress bool) error {
 	vnClient, err := s.GetVirtualNetworkClient(user)
@@ -154,6 +163,7 @@ func (s *OCIService) AddSecurityRule(ctx context.Context, user *models.OciUser, 
 
 	ingressRules := secListResp.IngressSecurityRules
 	egressRules := secListResp.EgressSecurityRules
+	rule.Protocol = normalizeAllPortsProtocol(rule.Protocol, rule.PortRangeMin, rule.PortRangeMax)
 
 	if isIngress {
 		newRule := core.IngressSecurityRule{

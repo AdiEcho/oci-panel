@@ -100,6 +100,7 @@ const submit = async () => {
         <p>- Internet 网关 {{ form.displayName || 'oci-panel-vcn' }}-igw</p>
         <p>- 默认路由 0.0.0.0/0 指向该网关</p>
         <p>- 公有子网 {{ form.displayName || 'oci-panel-vcn' }}-subnet（{{ form.cidrBlock || '10.0.0.0/16' }}）</p>
+        <p>- 安全列表入站放行所有协议（含 UDP/ICMP）与全部端口</p>
       </div>
     </div>
 

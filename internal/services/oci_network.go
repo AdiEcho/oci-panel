@@ -237,6 +237,20 @@ func (s *OCIService) CreateVcnWithNetwork(ctx context.Context, user *models.OciU
 		return nil, fmt.Errorf("等待子网创建超时")
 	}
 
+	// 5. 默认安全列表入站放行所有协议（含全部端口），IPv6 开启时同时放行 ::/0
+	if vcn.DefaultSecurityListId != nil {
+		_, err = vnClient.UpdateSecurityList(ctx, core.UpdateSecurityListRequest{
+			SecurityListId: vcn.DefaultSecurityListId,
+			UpdateSecurityListDetails: core.UpdateSecurityListDetails{
+				IngressSecurityRules: openIngressRules(isIpv6Enabled),
+				EgressSecurityRules:  openEgressRules(isIpv6Enabled),
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("放行安全列表失败: %w", err)
+		}
+	}
+
 	info := &models.VCNInfo{
 		ID:          *vcn.Id,
 		DisplayName: displayName,
@@ -260,6 +274,35 @@ func (s *OCIService) CreateVcnWithNetwork(ctx context.Context, user *models.OciU
 	}
 
 	return info, nil
+}
+
+// openIngressRules 入站放行所有协议（TCP/UDP/ICMP 等全部放行）。
+// 使用协议 all 而非 TCP 1-65535，确保 UDP 与 ICMP 不会被默认拦截。
+func openIngressRules(ipv6Enabled bool) []core.IngressSecurityRule {
+	allProtocol := "all"
+	ipv4Cidr := "0.0.0.0/0"
+	rules := []core.IngressSecurityRule{
+		{Protocol: &allProtocol, Source: &ipv4Cidr},
+	}
+	if ipv6Enabled {
+		ipv6Cidr := "::/0"
+		rules = append(rules, core.IngressSecurityRule{Protocol: &allProtocol, Source: &ipv6Cidr})
+	}
+	return rules
+}
+
+// openEgressRules 出站放行所有协议，保持与 OCI 默认出站一致。
+func openEgressRules(ipv6Enabled bool) []core.EgressSecurityRule {
+	allProtocol := "all"
+	ipv4Cidr := "0.0.0.0/0"
+	rules := []core.EgressSecurityRule{
+		{Protocol: &allProtocol, Destination: &ipv4Cidr},
+	}
+	if ipv6Enabled {
+		ipv6Cidr := "::/0"
+		rules = append(rules, core.EgressSecurityRule{Protocol: &allProtocol, Destination: &ipv6Cidr})
+	}
+	return rules
 }
 
 // GetPrivateIpIdForVnic 获取VNIC的私有IP的OCID

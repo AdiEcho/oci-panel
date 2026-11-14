@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { Loader2, Shield, Plus, Unlock, Trash2 } from '@lucide/vue'
 import { vcnApi } from '@/api'
 import { toast } from '@/composables/useToast'
@@ -36,7 +36,7 @@ const securityList = ref<any>(null)
 
 const addRuleForm = reactive({
   isIngress: true,
-  protocol: '6',
+  protocol: 'all',
   cidr: '0.0.0.0/0',
   portMin: 1,
   portMax: 65535,
@@ -87,13 +87,21 @@ const formatPortRange = (rule: any) => {
 
 const openAddRuleForm = (type: 'ingress' | 'egress') => {
   addRuleForm.isIngress = type === 'ingress'
-  addRuleForm.protocol = '6'
+  addRuleForm.protocol = 'all'
   addRuleForm.cidr = '0.0.0.0/0'
   addRuleForm.portMin = 1
   addRuleForm.portMax = 65535
   addRuleForm.description = ''
   showAddRuleModal.value = true
 }
+
+// 端口 1-65535 等价于放开所有端口，按「所有协议」提交，避免只放行 TCP。
+const allPortsSelected = computed(
+  () =>
+    (addRuleForm.protocol === '6' || addRuleForm.protocol === '17') &&
+    addRuleForm.portMin <= 1 &&
+    addRuleForm.portMax >= 65535
+)
 
 const submitAddRule = async () => {
   if (!addRuleForm.cidr) {
@@ -102,14 +110,15 @@ const submitAddRule = async () => {
   }
   addingRule.value = true
   try {
+    const protocol = allPortsSelected.value ? 'all' : addRuleForm.protocol
     const params: any = {
       configId: props.userId,
       vcnId: props.vcn?.id,
       isIngress: addRuleForm.isIngress,
-      protocol: addRuleForm.protocol,
+      protocol,
       description: addRuleForm.description || undefined
     }
-    if (addRuleForm.protocol === '6' || addRuleForm.protocol === '17') {
+    if (protocol === '6' || protocol === '17') {
       params.portMin = addRuleForm.portMin
       params.portMax = addRuleForm.portMax
     }
@@ -298,15 +307,20 @@ const deleteVcn = async () => {
         <Input v-model="addRuleForm.cidr" placeholder="0.0.0.0/0 或 ::/0" />
       </div>
 
-      <div v-if="['6', '17'].includes(addRuleForm.protocol)" class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium mb-2">端口范围(最小)</label>
-          <Input v-model.number="addRuleForm.portMin" type="number" min="1" max="65535" placeholder="1" />
+      <div v-if="['6', '17'].includes(addRuleForm.protocol)" class="space-y-2">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">端口范围(最小)</label>
+            <Input v-model.number="addRuleForm.portMin" type="number" min="1" max="65535" placeholder="1" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">端口范围(最大)</label>
+            <Input v-model.number="addRuleForm.portMax" type="number" min="1" max="65535" placeholder="65535" />
+          </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-2">端口范围(最大)</label>
-          <Input v-model.number="addRuleForm.portMax" type="number" min="1" max="65535" placeholder="65535" />
-        </div>
+        <p v-if="allPortsSelected" class="text-xs text-muted-foreground">
+          端口 1-65535 将按「所有协议」放行，同时覆盖 UDP 与 ICMP
+        </p>
       </div>
 
       <div>
