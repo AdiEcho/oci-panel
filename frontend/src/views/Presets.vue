@@ -186,7 +186,12 @@ const loadShapes = async (clearCache = false) => {
   loadingShapes.value = true
   try {
     const response = await ociApi.shapes({ configId: config.id, region: config.ociRegion, clearCache })
-    shapes.value = response.data || []
+    // 后端已按规格名去重，这里再兜底一次，避免旧缓存或异常响应渲染出重复卡片。
+    const unique = new Map<string, ShapeInfo>()
+    for (const shape of response.data || []) {
+      if (shape.shape && !unique.has(shape.shape)) unique.set(shape.shape, shape)
+    }
+    shapes.value = [...unique.values()]
     if (!form.value.shape) {
       const firstFree = shapes.value.find(shape => shape.freeTier)
       if (firstFree) selectShape(firstFree)

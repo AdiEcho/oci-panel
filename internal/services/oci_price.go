@@ -128,12 +128,14 @@ var (
 	priceRetryAt time.Time
 )
 
-// AttachPrices 为规格列表填充按需单价。
-func (s *OCIService) AttachPrices(shapes []ShapeInfo) {
+// NormalizeShapes 去重并填充按需单价，缓存与新拉取的数据都会经过这里。
+func (s *OCIService) NormalizeShapes(shapes []ShapeInfo) []ShapeInfo {
+	shapes = dedupeShapes(shapes)
 	catalog := getPriceCatalog()
 	for i := range shapes {
 		shapes[i].Price = catalog.priceFor(shapes[i])
 	}
+	return shapes
 }
 
 func (c *priceCatalog) priceFor(shape ShapeInfo) *ShapePrice {

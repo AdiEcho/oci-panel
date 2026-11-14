@@ -42,7 +42,7 @@ func (oc *OciController) ListShapes(c *gin.Context) {
 		if err := db.Where("id = ?", cacheKey).First(&cache).Error; err == nil && cache.ShapesData != "" {
 			var shapes []services.ShapeInfo
 			if json.Unmarshal([]byte(cache.ShapesData), &shapes) == nil {
-				oc.ociService.AttachPrices(shapes)
+				shapes = oc.ociService.NormalizeShapes(shapes)
 				c.JSON(http.StatusOK, models.SuccessResponse(shapes, "获取规格列表成功(缓存)"))
 				return
 			}
@@ -56,7 +56,7 @@ func (oc *OciController) ListShapes(c *gin.Context) {
 		return
 	}
 
-	oc.ociService.AttachPrices(shapes)
+	shapes = oc.ociService.NormalizeShapes(shapes)
 	shapesJSON, _ := json.Marshal(shapes)
 	var cache models.OciShapeCache
 	if err := db.Where("id = ?", cacheKey).First(&cache).Error; err != nil {

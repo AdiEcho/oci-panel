@@ -103,6 +103,9 @@ func (s *OCIService) ListShapes(ctx context.Context, user *models.OciUser, regio
 		shapes = append(shapes, info)
 	}
 
+	// Oracle 可能对同一规格返回多条（例如按可用域重复），按规格名去重。
+	shapes = dedupeShapes(shapes)
+
 	// 免费规格排前，其次按名称稳定排序，保证卡片顺序可预期。
 	sort.SliceStable(shapes, func(i, j int) bool {
 		if shapes[i].FreeTier != shapes[j].FreeTier {
@@ -112,6 +115,25 @@ func (s *OCIService) ListShapes(ctx context.Context, user *models.OciUser, regio
 	})
 
 	return shapes, nil
+}
+
+func dedupeShapes(shapes []ShapeInfo) []ShapeInfo {
+	if len(shapes) == 0 {
+		return shapes
+	}
+	seen := make(map[string]struct{}, len(shapes))
+	result := shapes[:0]
+	for _, shape := range shapes {
+		if shape.Shape == "" {
+			continue
+		}
+		if _, ok := seen[shape.Shape]; ok {
+			continue
+		}
+		seen[shape.Shape] = struct{}{}
+		result = append(result, shape)
+	}
+	return result
 }
 
 func shapeArchitecture(shape core.Shape) string {
