@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/adiecho/oci-panel/internal/database"
 	"github.com/adiecho/oci-panel/internal/models"
@@ -30,6 +31,7 @@ const (
 
 type ProxyImportRequest struct {
 	Text    string `json:"text" binding:"required"`
+	Prefix  string `json:"prefix"`
 	Enabled *bool  `json:"enabled"`
 }
 
@@ -182,6 +184,14 @@ func (pc *ProxyController) ImportProxies(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
+	prefix := strings.TrimSpace(req.Prefix)
+	if prefix == "" {
+		prefix = "导入代理"
+	}
+	if utf8.RuneCountInString(prefix) > 32 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(400, "名称前缀最多 32 个字符"))
+		return
+	}
 
 	var existing []models.ProxyConfig
 	if err := database.GetDB().Find(&existing).Error; err != nil {
@@ -196,6 +206,7 @@ func (pc *ProxyController) ImportProxies(c *gin.Context) {
 	}
 
 	result := ProxyImportResult{Errors: []string{}}
+	seq := 0
 	for index, line := range lines {
 		proxy, name, err := parseProxyLine(line)
 		if err != nil {
@@ -215,6 +226,17 @@ func (pc *ProxyController) ImportProxies(c *gin.Context) {
 			continue
 		}
 
+		if name == "" {
+			// 未指定 #名称 时按「前缀-序号」命名，序号避开已有名称。
+			for {
+				seq++
+				candidate := fmt.Sprintf("%s-%d", prefix, seq)
+				if _, exists := usedNames[candidate]; !exists {
+					name = candidate
+					break
+				}
+			}
+		}
 		proxy.Name = uniqueProxyName(name, usedNames)
 		proxy.Enabled = enabled
 		if err := database.GetDB().Create(proxy).Error; err != nil {

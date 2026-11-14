@@ -76,6 +76,6 @@ export const proxyApi = {
   test: (req: ProxyTestReq) => post<ProxyTestResult>('/proxy/test', req),
   batchBind: (configIds: string[], proxyId: string) =>
     post<{ updated: number }>('/proxy/batchBind', { configIds, proxyId }),
-  importText: (text: string) => post<ProxyImportResult>('/proxy/import', { text }),
+  importText: (text: string, prefix?: string) => post<ProxyImportResult>('/proxy/import', { text, prefix }),
   batchTest: (ids: string[]) => post<ProxyBatchTestItem[]>('/proxy/batchTest', { ids })
 }

@@ -40,7 +40,8 @@ const {
   isAllSelected,
   isIndeterminate,
   toggle: toggleSelect,
-  toggleAll: toggleSelectAll
+  toggleAll: toggleSelectAll,
+  clear: clearSelection
 } = useSelection(proxies, p => p.id)
 
 const showEditModal = ref(false)
@@ -53,6 +54,7 @@ const batchTesting = ref(false)
 const probeResults = ref<Record<string, ProxyTestResult>>({})
 const showImportModal = ref(false)
 const importText = ref('')
+const importPrefix = ref('导入代理')
 const importResult = ref<ProxyImportResult | null>(null)
 const importing = ref(false)
 
@@ -239,6 +241,7 @@ const runBatchTest = async () => {
 
 const openImport = () => {
   importText.value = ''
+  importPrefix.value = '导入代理'
   importResult.value = null
   showImportModal.value = true
 }
@@ -250,7 +253,7 @@ const submitImport = async () => {
   }
   importing.value = true
   try {
-    const response = await proxyApi.importText(importText.value)
+    const response = await proxyApi.importText(importText.value, importPrefix.value.trim() || undefined)
     importResult.value = response.data
     if (response.data.imported > 0) {
       toast.success(`成功导入 ${response.data.imported} 个代理`)
@@ -262,6 +265,20 @@ const submitImport = async () => {
     toast.error(error.message || '导入失败')
   } finally {
     importing.value = false
+  }
+}
+
+const batchDelete = async () => {
+  const ids = [...selectedIds.value]
+  if (!ids.length) return
+  if (!confirm(`确定要删除选中的 ${ids.length} 个代理吗？相关配置将改为直连。`)) return
+  try {
+    await proxyApi.delete(ids)
+    toast.success(`已删除 ${ids.length} 个代理`)
+    clearSelection()
+    await loadProxies(currentPage.value)
+  } catch (error: any) {
+    toast.error(error.message || '批量删除失败')
   }
 }
 
@@ -300,6 +317,10 @@ onMounted(() => {
           <Loader2 v-if="batchTesting" class="w-4 h-4 animate-spin" />
           <Zap v-else class="w-4 h-4" />
           {{ batchTesting ? '探测中...' : '批量探测' }}
+        </Button>
+        <Button variant="destructive" :disabled="!selectedIds.length" @click="batchDelete">
+          <Trash2 class="w-4 h-4" />
+          批量删除{{ selectedIds.length ? ` (${selectedIds.length})` : '' }}
         </Button>
         <Button variant="outline" @click="openImport">
           <Upload class="w-4 h-4" />
@@ -467,6 +488,12 @@ onMounted(() => {
       </DialogHeader>
 
       <form class="space-y-4" @submit.prevent="submitImport">
+        <div>
+          <label class="block text-sm font-medium mb-2">名称前缀</label>
+          <Input v-model="importPrefix" placeholder="导入代理" maxlength="32" />
+          <p class="text-xs text-muted-foreground mt-2">未在行尾指定 #名称 时，按「前缀-序号」自动命名</p>
+        </div>
+
         <div>
           <label class="block text-sm font-medium mb-2">代理列表</label>
           <Textarea

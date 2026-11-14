@@ -78,7 +78,7 @@ func TestImportProxiesSkipsDuplicatesAndBadLines(t *testing.T) {
 		"https://4.4.4.4:8443\n" +
 		"badline\n" +
 		"4.4.4.4:8443#SG\n"
-	payload, err := json.Marshal(gin.H{"text": text})
+	payload, err := json.Marshal(gin.H{"text": text, "prefix": "HK"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,6 +97,25 @@ func TestImportProxiesSkipsDuplicatesAndBadLines(t *testing.T) {
 	}
 	if socks.Protocol != "socks5" || socks.Username != "alice" || socks.Password != "p@ss" {
 		t.Fatalf("unexpected imported socks proxy: %+v", socks)
+	}
+
+	// 未命名行按「前缀-序号」命名。
+	for _, tc := range []struct {
+		name     string
+		protocol string
+		host     string
+		port     int
+	}{
+		{name: "HK-1", protocol: "http", host: "2.2.2.2", port: 8080},
+		{name: "HK-2", protocol: "https", host: "4.4.4.4", port: 8443},
+	} {
+		var generated models.ProxyConfig
+		if err := db.Where("name = ?", tc.name).First(&generated).Error; err != nil {
+			t.Fatal(err)
+		}
+		if generated.Protocol != tc.protocol || generated.Host != tc.host || generated.Port != tc.port {
+			t.Fatalf("unexpected generated proxy %s: %+v", tc.name, generated)
+		}
 	}
 
 	// 同一地址不同协议不视为重复；名称冲突自动追加序号。
